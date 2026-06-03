@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Cache Simulator | Terminal Neon • 6 Algorithms + Step-by-Step Log</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: radial-gradient(circle at 20% 30%, #0a0f1e, #03060c);
+            font-family: 'Inter', 'JetBrains Mono', monospace;
+            color: #e2e8f0;
+            padding: 1.5rem;
+            min-height: 100vh;
+        }
+
+        .app-container {
+            max-width: 1600px;
+            margin: 0 auto;
+            backdrop-filter: blur(1px);
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 1.5rem;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            background: rgba(8, 12, 24, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 255, 196, 0.25);
+            border-radius: 1.25rem;
+            padding: 1.5rem;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.5), inset 0 0 12px rgba(0,255,200,0.05);
+        }
+
+        .panel-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            font-size: 1rem;
+            text-transform: uppercase;
+            border-left: 4px solid #0ff7c2;
+            padding-left: 0.75rem;
+            margin-bottom: 1.25rem;
+            color: #b2ffe6;
+        }
+
+        .input-group {
+            margin-bottom: 1.4rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            font-weight: 500;
+            letter-spacing: 1px;
+            color: #7f9fc0;
+            margin-bottom: 0.3rem;
+        }
+
+        select, input, button {
+            background: #0b1120;
+            border: 1px solid #2a3a55;
+            border-radius: 12px;
+            padding: 0.55rem 0.9rem;
+            width: 100%;
+            font-family: 'JetBrains Mono', monospace;
+            color: #cff7ef;
+            font-size: 0.85rem;
+            transition: 0.2s;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #3effdb;
+            box-shadow: 0 0 8px #3effdb66;
+        }
+
+        button {
+            background: #13202f;
+            cursor: pointer;
+            font-weight: 500;
+            border-color: #2c5270;
+        }
+
+        button:hover {
+            background: #1c3048;
+            border-color: #5effe0;
+            color: white;
+            box-shadow: 0 0 5px cyan;
+        }
+
+        .flex-btns {
+            display: flex;
+            gap: 8px;
+            margin: 12px 0;
+            flex-wrap: wrap;
+        }
+
+        .flex-btns button {
+            flex: 1 1 auto;
+            min-width: 70px;
+        }
+
+        .stats-panel {
+            background: #03070e80;
+            border-radius: 1rem;
+            padding: 0.9rem;
+            margin-top: 1rem;
+            border-top: 1px solid #2a4555;
+        }
+
+        .hit-rate-bar {
+            background: #1f2a3a;
+            border-radius: 20px;
+            height: 8px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+
+        .hit-rate-fill {
+            background: #1effbc;
+            width: 0%;
+            height: 100%;
+            box-shadow: 0 0 6px #0affb3;
+        }
+
+        /* Visual Area */
+        .visual-area {
+            background: rgba(2, 6, 16, 0.6);
+            backdrop-filter: blur(4px);
+            border-radius: 1.5rem;
+            border: 1px solid #2c4c66;
+            padding: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .request-bar {
+            background: #051020;
+            padding: 1rem;
+            border-radius: 1.2rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .req-item {
+            background: #16212e;
+            padding: 0.4rem 0.9rem;
+            border-radius: 40px;
+            font-family: monospace;
+            font-weight: bold;
+            transition: all 0.2s ease;
+            border: 1px solid #2c4f6e;
+        }
+
+        .req-current {
+            background: #0ff7c2;
+            color: #021018;
+            box-shadow: 0 0 12px cyan;
+            border-color: white;
+            transform: scale(1.05);
+        }
+
+        .req-past {
+            opacity: 0.5;
+            background: #1b2c3f;
+            border-color: #2c5f7a;
+        }
+
+        .cache-grid {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 0.5rem 0;
+        }
+
+        .cache-slot {
+            background: #07121f;
+            width: 90px;
+            height: 90px;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+            border: 2px solid #2c5775;
+            box-shadow: 0 4px 10px black;
+            transition: all 0.1s ease;
+        }
+
+        .freq-badge {
+            background: #ffb347;
+            color: #0a0f1e;
+            font-size: 0.65rem;
+            border-radius: 30px;
+            padding: 2px 8px;
+            margin-top: 6px;
+            font-weight: bold;
+        }
+
+        .hit-flash { animation: cyanPulse 0.35s ease; background: #2affd0; color: black; box-shadow: 0 0 20px cyan; border-color: white; }
+        .miss-flash { animation: greenFlash 0.35s ease; background: #1effa0; color: black; }
+
+        @keyframes cyanPulse { 0% { background: #0ff7c2; transform: scale(1); } 100% { background: #07121f; } }
+        @keyframes greenFlash { 0% { background: #6effb0; } 100% { background: #07121f; } }
+
+        /* Simulation Log Table */
+        .log-container {
+            background: #030b16;
+            border-radius: 1rem;
+            padding: 0.8rem;
+            margin-top: 0.5rem;
+            border: 1px solid #2c4c66;
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 0.8rem;
+            flex-wrap: wrap;
+        }
+
+        .log-header h3 {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #0ff7c2;
+        }
+
+        .log-table-wrapper {
+            max-height: 280px;
+            overflow-y: auto;
+            font-size: 0.75rem;
+        }
+
+        .sim-log-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .sim-log-table th, .sim-log-table td {
+            border-bottom: 1px solid #1f3a4a;
+            padding: 0.5rem 0.3rem;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .sim-log-table th {
+            color: #9fc5e8;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            background: #030b16;
+        }
+
+        .step-desc {
+            font-size: 0.7rem;
+            color: #b8e2ff;
+        }
+
+        kbd {
+            background: #0b1424;
+            border-radius: 6px;
+            padding: 0 0.3rem;
+            font-size: 0.7rem;
+            border: 1px solid #3effdb;
+        }
+
+        .separator {
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            border-top: 1px dashed #2c4c66;
+        }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    <!-- Control Panel -->
+    <div class="control-panel">
+        <div class="panel-title">⚡ CACHE CONTROLLER</div>
+        <div class="input-group">
+            <label>📌 ALGORITHM</label>
+            <select id="algoSelect">
+                <option value="FIFO">FIFO (First In First Out)</option>
+                <option value="LRU">LRU (Least Recently Used)</option>
+                <option value="LFU">LFU (Least Frequently Used) — freq badges</option>
+                <option value="LIFO">LIFO (Last In First Out)</option>
+                <option value="MRU">MRU (Most Recently Used)</option>
+                <option value="RANDOM">Random Replacement</option>
+            </select>
+            <div class="badge-desc" id="algoDesc">FIFO: evicts the oldest inserted item</div>
+        </div>
+
+        <div class="input-group">
+            <label>💾 CACHE SIZE (1-10)</label>
+            <input type="number" id="cacheSize" min="1" max="10" value="4">
+        </div>
+
+        <div class="input-group">
+            <label>🔢 REQUEST SEQUENCE (comma/space)</label>
+            <input type="text" id="reqSequence" value="8,4,7,4,8,9,8,1">
+            <div class="flex-btns">
+                <button id="randomSeqBtn" style="width:50%">🎲 RANDOM</button>
+                <button id="applySeqBtn" style="width:50%">✓ APPLY</button>
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label>⚡ PLAYBACK SPEED</label>
+            <input type="range" id="speedSlider" min="0.5" max="3" step="0.1" value="1">
+            <div class="flex-btns">
+                <button id="playBtn">▶ START</button>
+                <button id="pauseBtn">⏸ PAUSE</button>
+                <button id="stepBtn">⏩ STEP</button>
+                <button id="stopBtn">⏹ STOP</button>
+            </div>
+            <div style="font-size:0.7rem; margin-top:5px"><kbd>Space</kbd> play/pause · <kbd>→</kbd> step · <kbd>Esc</kbd> stop</div>
+        </div>
+
+        <!-- Clear Log Button - now in its own row, properly inside panel -->
+        <div class="input-group">
+            <button id="clearLogBtn" style="background: #1e2a3a; border-color: #ff8c5a;">🗑 CLEAR LOG</button>
+        </div>
+
+        <div class="stats-panel">
+            <div>🎯 HITS: <span id="hitCount">0</span> &nbsp;|&nbsp; ❌ MISSES: <span id="missCount">0</span></div>
+            <div class="hit-rate-bar"><div class="hit-rate-fill" id="hitRateFill"></div></div>
+            <div id="hitRateText">0%</div>
+        </div>
+    </div>
+
+    <!-- Right Area: Visuals + Log Table -->
+    <div class="visual-area">
+        <div id="requestSequenceBar" class="request-bar">—</div>
+        <div id="cacheGridView" class="cache-grid">—</div>
+
+        <!-- Simulation Log Table -->
+        <div class="log-container">
+            <div class="log-header">
+                <h3>📋 STEP-BY-STEP SIMULATION LOG</h3>
+                <span style="font-size:0.65rem;">(oldest → newest left-to-right)</span>
+            </div>
+            <div class="log-table-wrapper">
+                <table class="sim-log-table" id="simLogTable">
+                    <thead>
+                        <tr><th>Step</th><th>Key</th><th>Cache State (oldest → newest)</th><th>Hit/Miss</th><th>Action</th></tr>
+                    </thead>
+                    <tbody id="logTableBody">
+                        <tr><td colspan="5" style="text-align:center;">— No steps yet —</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ---------- GLOBALS ----------
+    let currentMode = "FIFO";
+    let cache = [];            // array of {key, lastUsed, freq?}
+    let requestList = [];
+    let currentIndex = 0;
+    let hits = 0, misses = 0;
+    let animationTimer = null;
+    let isPlaying = false;
+    
+    // Algorithm specific structures
+    let fifoQueue = [];       // not strictly needed, but kept for clarity
+    let lifoStack = [];
+    
+    // Log entries
+    let logEntries = [];      // each entry: {step, key, cacheStateStr, hitMiss, action}
+    
+    // DOM elements
+    const algoSelect = document.getElementById('algoSelect');
+    const cacheSizeInput = document.getElementById('cacheSize');
+    const reqSequenceInput = document.getElementById('reqSequence');
+    const hitSpan = document.getElementById('hitCount');
+    const missSpan = document.getElementById('missCount');
+    const hitRateFill = document.getElementById('hitRateFill');
+    const hitRateText = document.getElementById('hitRateText');
+    const requestBarDiv = document.getElementById('requestSequenceBar');
+    const cacheGridView = document.getElementById('cacheGridView');
+    const logTableBody = document.getElementById('logTableBody');
+    const stepDescDiv = document.getElementById('stepDescription'); // not used but keep reference
+    const clearLogBtn = document.getElementById('clearLogBtn');
+    
+    // Helper: update algorithm description
+    function updateAlgoDescription() {
+        const descMap = {
+            FIFO: "FIFO: evicts the oldest inserted item",
+            LRU: "LRU: evicts the least recently used item",
+            LFU: "LFU: evicts the least frequently used (tie by LRU)",
+            LIFO: "LIFO: evicts the most recently inserted (stack)",
+            MRU: "MRU: evicts the most recently used item",
+            RANDOM: "Random: evicts a random cache line"
+        };
+        document.getElementById('algoDesc').innerText = descMap[currentMode] || "";
+    }
+    
+    // ---------- CACHE STATE STRING (oldest → newest) ----------
+    function getCacheStateString() {
+        if (cache.length === 0) return "[ ]";
+        // For all algorithms, we store cache in order where index 0 = oldest (eviction priority)
+        // For FIFO: insertion order
+        // For LIFO: we maintain stack order: last inserted at end
+        // For LRU: sort by lastUsed ascending => oldest first
+        // For MRU: also by lastUsed ascending (oldest first) — eviction uses last element (most recent)
+        // For LFU: show by insertion order for clarity, but eviction is frequency based
+        let orderedKeys = [];
+        if (currentMode === "LRU" || currentMode === "MRU") {
+            // order by lastUsed ascending (oldest first)
+            let sorted = [...cache].sort((a,b) => a.lastUsed - b.lastUsed);
+            orderedKeys = sorted.map(item => item.key);
+        } else if (currentMode === "LIFO") {
+            // LIFO: our cache array grows at end, last element is most recent. Oldest is index 0.
+            orderedKeys = cache.map(item => item.key);
+        } else {
+            // FIFO, LFU, RANDOM: simple array order (insertion / natural order)
+            orderedKeys = cache.map(item => item.key);
+        }
+        return `[${orderedKeys.join(', ')}]`;
+    }
+    
+    // Add a log row
+    function addLogEntry(stepNum, key, hitMiss, action) {
+        const cacheState = getCacheStateString();
+        logEntries.push({
+            step: stepNum,
+            key: key,
+            cacheState: cacheState,
+            hitMiss: hitMiss,
+            action: action
+        });
+        renderLogTable();
+    }
+    
+    function renderLogTable() {
+        if (logEntries.length === 0) {
+            logTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">— No steps yet —</td></tr>';
+            return;
+        }
+        let html = '';
+        for (let entry of logEntries) {
+            html += `<tr>
+                        <td>${entry.step}</td>
+                        <td>${entry.key}</td>
+                        <td class="step-desc">${entry.cacheState}</td>
+                        <td style="color:${entry.hitMiss === 'HIT' ? '#0ff7c2' : '#ffb347'}">${entry.hitMiss}</td>
+                        <td class="step-desc">${entry.action}</td>
+                      </tr>`;
+        }
+        logTableBody.innerHTML = html;
+        // auto-scroll to bottom
+        const wrapper = document.querySelector('.log-table-wrapper');
+        if (wrapper) wrapper.scrollTop = wrapper.scrollHeight;
+    }
+    
+    function clearLog() {
+        logEntries = [];
+        renderLogTable();
+    }
+    
+    // Reset entire simulation (clear cache, stats, log, index)
+    function fullReset(keepSequence = true) {
+        stopAutoPlay();
+        currentIndex = 0;
+        hits = 0;
+        misses = 0;
+        cache = [];
+        fifoQueue = [];
+        lifoStack = [];
+        if (!keepSequence) {
+            // if needed, but we usually reset sequence from input
+        }
+        updateStatsUI();
+        clearLog();
+        renderCacheGrid();
+        updateRequestBar();
+        updateStepDescription("Simulation reset.");
+    }
+    
+    function resetStandardCache() {
+        fullReset();
+    }
+    
+    function updateStatsUI() {
+        hitSpan.innerText = hits;
+        missSpan.innerText = misses;
+        let total = hits + misses;
+        let rate = total === 0 ? 0 : (hits / total) * 100;
+        hitRateFill.style.width = `${rate}%`;
+        hitRateText.innerText = `${rate.toFixed(1)}%`;
+    }
+    
+    function parseRequestSequence() {
+        let raw = reqSequenceInput.value;
+        let items = raw.split(/[ ,]+/).filter(s => s.trim().length > 0);
+        return items.map(s => s.trim());
+    }
+    
+    function applyRequestSequence() {
+        stopAutoPlay();
+        requestList = parseRequestSequence();
+        fullReset();
+        renderUI();
+        updateStepDescription(`Sequence updated. ${requestList.length} requests loaded.`);
+    }
+    
+    // ---------- EVICTION INDEX (for insertion on miss when full) ----------
+    function getEvictionIndex(newKey, cacheArr, algo, sizeLimit) {
+        if (cacheArr.length < sizeLimit) return -1;
+        if (algo === "RANDOM") return Math.floor(Math.random() * cacheArr.length);
+        if (algo === "FIFO") return 0;                  // oldest is at index 0
+        if (algo === "LIFO") return cacheArr.length - 1; // last inserted
+        if (algo === "LRU") {
+            let oldestIdx = 0, oldestTime = cacheArr[0].lastUsed;
+            for (let i = 1; i < cacheArr.length; i++) {
+                if (cacheArr[i].lastUsed < oldestTime) {
+                    oldestTime = cacheArr[i].lastUsed;
+                    oldestIdx = i;
+                }
+            }
+            return oldestIdx;
+        }
+        if (algo === "MRU") {
+            let mruIdx = 0, mruTime = cacheArr[0].lastUsed;
+            for (let i = 1; i < cacheArr.length; i++) {
+                if (cacheArr[i].lastUsed > mruTime) {
+                    mruTime = cacheArr[i].lastUsed;
+                    mruIdx = i;
+                }
+            }
+            return mruIdx;
+        }
+        if (algo === "LFU") {
+            let minFreq = Infinity, minIdx = 0, minLastUsed = Infinity;
+            for (let i = 0; i < cacheArr.length; i++) {
+                let freq = cacheArr[i].freq || 0;
+                if (freq < minFreq || (freq === minFreq && cacheArr[i].lastUsed < minLastUsed)) {
+                    minFreq = freq;
+                    minIdx = i;
+                    minLastUsed = cacheArr[i].lastUsed;
+                }
+            }
+            return minIdx;
+        }
+        return 0;
+    }
+    
+    // Process one step: returns true if processed, false if end
+    function processStep() {
+        if (currentIndex >= requestList.length) {
+            stopAutoPlay();
+            updateStepDescription("✅ End of sequence.");
+            return false;
+        }
+        const requestKey = requestList[currentIndex].toString();
+        let foundIdx = cache.findIndex(item => item.key === requestKey);
+        let isHit = (foundIdx !== -1);
+        let evictedItem = null;
+        let evictIdx = -1;
+        const sizeLimit = parseInt(cacheSizeInput.value, 10);
+        let actionMsg = "";
+        let hitMissLabel = "";
+        
+        // Timestamp for recency
+        const now = Date.now();
+        
+        if (isHit) {
+            hits++;
+            hitMissLabel = "HIT";
+            // update frequency and recency
+            if (currentMode === "LFU") cache[foundIdx].freq = (cache[foundIdx].freq || 0) + 1;
+            cache[foundIdx].lastUsed = now;
+            actionMsg = `Hit, no change (${currentMode === "LFU" ? "frequency++" : "access updated"})`;
+        } else {
+            misses++;
+            hitMissLabel = "MISS";
+            // Need to evict if full
+            evictIdx = getEvictionIndex(requestKey, cache, currentMode, sizeLimit);
+            if (evictIdx !== -1 && cache.length === sizeLimit) {
+                evictedItem = cache[evictIdx];
+                actionMsg = `Evict ${evictedItem.key} (${getEvictionReason()}), insert ${requestKey}`;
+                cache.splice(evictIdx, 1);
+            } else {
+                actionMsg = `Insert ${requestKey} (cache not full)`;
+            }
+            // Insert new entry
+            let newEntry = { key: requestKey, lastUsed: now, freq: 1 };
+            if (currentMode === "LFU") newEntry.freq = 1;
+            cache.push(newEntry);
+        }
+        
+        // Build more descriptive action if needed
+        if (!isHit && evictedItem) {
+            if (currentMode === "FIFO") actionMsg = `Evict oldest (${evictedItem.key}), insert ${requestKey}`;
+            else if (currentMode === "LIFO") actionMsg = `Evict newest (${evictedItem.key}), insert ${requestKey}`;
+            else if (currentMode === "LRU") actionMsg = `Evict least recently used (${evictedItem.key}), insert ${requestKey}`;
+            else if (currentMode === "MRU") actionMsg = `Evict most recently used (${evictedItem.key}), insert ${requestKey}`;
+            else if (currentMode === "LFU") actionMsg = `Evict least frequent (${evictedItem.key}), insert ${requestKey}`;
+            else if (currentMode === "RANDOM") actionMsg = `Evict random (${evictedItem.key}), insert ${requestKey}`;
+        }
+        
+        // Log entry
+        const stepNumber = currentIndex + 1;
+        addLogEntry(stepNumber, requestKey, hitMissLabel, actionMsg);
+        
+        // Update index
+        currentIndex++;
+        
+        // Visual updates
+        renderCacheGridWithFlash(isHit, foundIdx);
+        updateRequestBar();
+        updateStatsUI();
+        
+        // Describe step in description area
+        let stepDescText = isHit ? `HIT: "${requestKey}" found. ${actionMsg}` : `MISS: "${requestKey}". ${actionMsg}`;
+        updateStepDescription(stepDescText);
+        
+        return true;
+    }
+    
+    function getEvictionReason() {
+        switch(currentMode) {
+            case "FIFO": return "oldest";
+            case "LIFO": return "newest";
+            case "LRU": return "least recently used";
+            case "MRU": return "most recently used";
+            case "LFU": return "least frequently used";
+            case "RANDOM": return "random";
+            default: return "selected";
+        }
+    }
+    
+    // ---------- UI RENDERING ----------
+    function updateRequestBar() {
+        if (!requestList.length) {
+            requestBarDiv.innerHTML = '<span>⏳ No sequence</span>';
+            return;
+        }
+        let html = '';
+        requestList.forEach((req, idx) => {
+            let cls = '';
+            if (idx < currentIndex) cls = 'req-past';
+            else if (idx === currentIndex) cls = 'req-current';
+            else cls = 'req-future';
+            html += `<div class="req-item ${cls}">${req}</div>`;
+        });
+        requestBarDiv.innerHTML = html;
+    }
+    
+    function renderCacheGrid() {
+        const sizeLimit = parseInt(cacheSizeInput.value, 10);
+        let gridHtml = '';
+        for (let i = 0; i < sizeLimit; i++) {
+            let item = i < cache.length ? cache[i] : null;
+            let freqBadge = (item && currentMode === "LFU") ? `<div class="freq-badge">⚡${item.freq || 0}</div>` : '';
+            gridHtml += `<div class="cache-slot" id="slot-${i}">${item ? item.key : '⬚'}${freqBadge}</div>`;
+        }
+        cacheGridView.innerHTML = gridHtml;
+    }
+    
+    function renderCacheGridWithFlash(isHit, slotIndex) {
+        renderCacheGrid();
+        if (!isHit) {
+            // new item inserted at last slot
+            let newIdx = cache.length - 1;
+            let slotDiv = document.getElementById(`slot-${newIdx}`);
+            if (slotDiv) {
+                slotDiv.classList.add('miss-flash');
+                setTimeout(() => slotDiv?.classList.remove('miss-flash'), 350);
+            }
+        } else if (slotIndex !== undefined && slotIndex !== -1) {
+            let slotDiv = document.getElementById(`slot-${slotIndex}`);
+            if (slotDiv) {
+                slotDiv.classList.add('hit-flash');
+                setTimeout(() => slotDiv?.classList.remove('hit-flash'), 350);
+            }
+        }
+    }
+    
+    function renderUI() {
+        updateRequestBar();
+        renderCacheGrid();
+        updateStatsUI();
+    }
+    
+    function updateStepDescription(msg) {
+        const stepDescElem = document.getElementById('stepDescription');
+        if (stepDescElem) stepDescElem.innerHTML = `📢 ${msg}`;
+        else {
+            // fallback: create if missing
+            let existing = document.querySelector('.step-description');
+            if (existing) existing.innerHTML = `📢 ${msg}`;
+        }
+    }
+    
+    // ---------- PLAYBACK CONTROL ----------
+    function startAutoPlay() {
+        if (isPlaying) return;
+        isPlaying = true;
+        let speed = parseFloat(document.getElementById('speedSlider').value);
+        function stepIter() {
+            if (!isPlaying) return;
+            if (currentIndex < requestList.length) {
+                processStep();
+                animationTimer = setTimeout(stepIter, 1000 / speed);
+            } else {
+                stopAutoPlay();
+                updateStepDescription("🏁 Playback finished.");
+            }
+        }
+        if (animationTimer) clearTimeout(animationTimer);
+        stepIter();
+    }
+    
+    function stopAutoPlay() {
+        isPlaying = false;
+        if (animationTimer) clearTimeout(animationTimer);
+        animationTimer = null;
+    }
+    
+    function pauseAutoPlay() {
+        isPlaying = false;
+        if (animationTimer) clearTimeout(animationTimer);
+        animationTimer = null;
+    }
+    
+    // ---------- EVENT LISTENERS & INIT ----------
+    document.getElementById('playBtn').onclick = () => startAutoPlay();
+    document.getElementById('pauseBtn').onclick = () => pauseAutoPlay();
+    document.getElementById('stopBtn').onclick = () => { stopAutoPlay(); fullReset(); };
+    document.getElementById('stepBtn').onclick = () => { if (!isPlaying) processStep(); else pauseAutoPlay(); };
+    document.getElementById('applySeqBtn').onclick = () => applyRequestSequence();
+    document.getElementById('randomSeqBtn').onclick = () => {
+        let len = 8;
+        let randSeq = Array.from({ length: len }, () => Math.floor(Math.random() * 9) + 1).join(',');
+        reqSequenceInput.value = randSeq;
+        applyRequestSequence();
+    };
+    clearLogBtn.onclick = () => { clearLog(); };
+    
+    algoSelect.onchange = () => {
+        currentMode = algoSelect.value;
+        updateAlgoDescription();
+        fullReset();
+    };
+    cacheSizeInput.onchange = () => { fullReset(); };
+    
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') { e.preventDefault(); isPlaying ? pauseAutoPlay() : startAutoPlay(); }
+        else if (e.code === 'ArrowRight') { e.preventDefault(); if (!isPlaying) processStep(); else pauseAutoPlay(); }
+        else if (e.code === 'Escape') { stopAutoPlay(); fullReset(); }
+    });
+    
+    // Init step description div if missing
+    if (!document.getElementById('stepDescription')) {
+        let newDiv = document.createElement('div');
+        newDiv.id = 'stepDescription';
+        newDiv.className = 'step-description';
+        newDiv.style.marginTop = '0.5rem';
+        document.querySelector('.visual-area').appendChild(newDiv);
+    }
+    
+    // Initial load
+    function init() {
+        requestList = parseRequestSequence();
+        currentMode = "FIFO";
+        algoSelect.value = "FIFO";
+        updateAlgoDescription();
+        fullReset();
+        renderUI();
+        updateStepDescription("Ready. Press START or STEP.");
+    }
+    init();
+</script>
+</body>
+</html>
