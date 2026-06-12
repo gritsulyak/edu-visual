@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consistent Hashing Visualizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root,[data-theme="light"]{
+  --bg:#f7f6f2;--surface:#ffffff;--surface-2:#f3f0ec;--surface-3:#edeae5;
+  --border:oklch(0.2 0.01 80 / 0.12);--divider:#dcd9d5;
+  --text:#28251d;--muted:#7a7974;--faint:#bab9b4;
+  --primary:#01696f;--primary-h:#0c4e54;--primary-hi:#cedcd8;
+  --blue:#006494;--blue-hi:#c6d8e4;
+  --orange:#da7101;--orange-hi:#e7d7c4;
+  --purple:#7a39bb;--purple-hi:#dacfde;
+  --green:#437a22;--green-hi:#d4dfcc;
+  --red:#a13544;--red-hi:#dececb;
+  --shadow-sm:0 1px 2px oklch(0.2 0.01 80/0.06);
+  --shadow-md:0 4px 12px oklch(0.2 0.01 80/0.08);
+  --shadow-lg:0 12px 32px oklch(0.2 0.01 80/0.12);
+  --r-sm:0.375rem;--r-md:0.5rem;--r-lg:0.75rem;--r-xl:1rem;
+  --font-body:'Inter',sans-serif;--font-mono:'JetBrains Mono',monospace;
+}
+[data-theme="dark"]{
+  --bg:#171614;--surface:#1c1b19;--surface-2:#22211f;--surface-3:#2d2c2a;
+  --border:oklch(1 0 0/0.1);--divider:#262523;
+  --text:#cdccca;--muted:#797876;--faint:#5a5957;
+  --primary:#4f98a3;--primary-h:#227f8b;--primary-hi:#313b3b;
+  --blue:#5591c7;--blue-hi:#3a4550;
+  --orange:#fdab43;--orange-hi:#564b3e;
+  --purple:#a86fdf;--purple-hi:#4e4652;
+  --green:#6daa45;--green-hi:#3a4435;
+  --red:#dd6974;--red-hi:#574848;
+  --shadow-sm:0 1px 2px oklch(0 0 0/0.2);
+  --shadow-md:0 4px 12px oklch(0 0 0/0.3);
+  --shadow-lg:0 12px 32px oklch(0 0 0/0.4);
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme]){
+  --bg:#171614;--surface:#1c1b19;--surface-2:#22211f;--surface-3:#2d2c2a;
+  --border:oklch(1 0 0/0.1);--divider:#262523;
+  --text:#cdccca;--muted:#797876;--faint:#5a5957;
+  --primary:#4f98a3;--primary-h:#227f8b;--primary-hi:#313b3b;
+  --blue:#5591c7;--blue-hi:#3a4550;
+  --orange:#fdab43;--orange-hi:#564b3e;
+  --purple:#a86fdf;--purple-hi:#4e4652;
+  --green:#6daa45;--green-hi:#3a4435;
+  --red:#dd6974;--red-hi:#574848;
+}}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;scroll-behavior:smooth}
+body{font-family:var(--font-body);background:var(--bg);color:var(--text);min-height:100dvh;font-size:1rem;line-height:1.6}
+button{cursor:pointer;font:inherit;color:inherit}
+input,select{font:inherit;color:inherit}
+table{border-collapse:collapse;width:100%}
+
+/* Layout */
+.app{display:grid;grid-template-rows:auto 1fr;min-height:100dvh}
+header{padding:0.875rem 1.5rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow-sm);position:sticky;top:0;z-index:50}
+.logo{display:flex;align-items:center;gap:0.625rem;font-weight:700;font-size:1rem}
+.logo svg{color:var(--primary)}
+.header-right{display:flex;align-items:center;gap:0.75rem}
+.main{display:grid;grid-template-columns:320px 1fr;min-height:0;overflow:hidden}
+@media(max-width:900px){.main{grid-template-columns:1fr;grid-template-rows:auto 1fr}}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:1.25rem}
+.content{overflow-y:auto;padding:1.5rem;display:flex;flex-direction:column;gap:1.5rem}
+
+/* Controls */
+.section-label{font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--muted);margin-bottom:0.5rem}
+.input-row{display:flex;gap:0.5rem;align-items:center}
+input[type=text]{flex:1;padding:0.4375rem 0.75rem;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-2);font-size:0.875rem;transition:border-color 0.15s,box-shadow 0.15s}
+input[type=text]:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px oklch(from var(--primary) l c h/0.15)}
+input[type=number]{width:70px;padding:0.4375rem 0.5rem;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-2);font-size:0.875rem}
+.btn{padding:0.4375rem 0.875rem;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface-2);font-size:0.875rem;font-weight:500;transition:all 0.15s;white-space:nowrap}
+.btn:hover{background:var(--surface-3)}
+.btn-primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+.btn-primary:hover{background:var(--primary-h);border-color:var(--primary-h)}
+.btn-danger{background:var(--red);color:#fff;border-color:var(--red)}
+.btn-danger:hover{opacity:0.85}
+.btn-sm{padding:0.25rem 0.625rem;font-size:0.8125rem}
+.btn-icon{padding:0.375rem;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface-2);display:flex;align-items:center;justify-content:center;transition:all 0.15s}
+.btn-icon:hover{background:var(--surface-3)}
+
+/* Server chips */
+.server-list{display:flex;flex-direction:column;gap:0.5rem}
+.server-chip{display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.75rem;border-radius:var(--r-lg);background:var(--surface-2);border:1px solid var(--border);font-size:0.875rem}
+.server-chip .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.server-chip .name{flex:1;font-weight:500}
+.server-chip .vnodes{font-size:0.75rem;color:var(--muted);font-family:var(--font-mono)}
+
+/* Key chips */
+.key-list{display:flex;flex-direction:column;gap:0.375rem}
+.key-chip{display:flex;align-items:center;gap:0.5rem;padding:0.375rem 0.75rem;border-radius:var(--r-md);background:var(--surface-2);border:1px solid var(--border);font-size:0.8125rem}
+.key-chip .key-name{flex:1;font-family:var(--font-mono);font-weight:600}
+.key-chip .key-hash{font-size:0.75rem;color:var(--muted);font-family:var(--font-mono)}
+.key-chip .key-srv{font-size:0.75rem;font-weight:600;padding:0.125rem 0.5rem;border-radius:var(--r-full);background:var(--primary-hi);color:var(--primary)}
+
+/* Hash ring table */
+.ring-table-wrap{background:var(--surface);border-radius:var(--r-xl);border:1px solid var(--border);box-shadow:var(--shadow-sm);overflow:hidden}
+.ring-table-header{padding:1rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.ring-table-header h2{font-size:1rem;font-weight:700}
+.ring-table-scroll{overflow-x:auto}
+table th{text-align:left;font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);padding:0.625rem 1rem;border-bottom:1px solid var(--border);white-space:nowrap;background:var(--surface-2)}
+table td{padding:0.5625rem 1rem;border-bottom:1px solid var(--border);font-size:0.875rem;font-family:var(--font-mono);vertical-align:middle;white-space:nowrap}
+table tr:last-child td{border-bottom:none}
+table tr.highlight-row td{background:color-mix(in oklch,var(--primary) 8%,var(--surface))}
+table tr.data-row td{background:color-mix(in oklch,var(--orange) 7%,var(--surface))}
+.hash-val{font-size:0.8125rem;color:var(--muted)}
+.position-val{font-weight:600;color:var(--text)}
+.type-badge{display:inline-flex;align-items:center;gap:0.25rem;padding:0.125rem 0.5rem;border-radius:var(--r-full);font-size:0.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-family:var(--font-body)}
+.type-server{background:var(--primary-hi);color:var(--primary)}
+.type-vnode{background:var(--blue-hi);color:var(--blue)}
+.type-data{background:var(--orange-hi);color:var(--orange)}
+.owns-badge{display:inline-flex;align-items:center;gap:0.25rem;padding:0.125rem 0.5rem;border-radius:var(--r-full);font-size:0.6875rem;font-weight:600;font-family:var(--font-body)}
+
+/* Explainer */
+.explainer{background:var(--surface);border-radius:var(--r-xl);border:1px solid var(--border);box-shadow:var(--shadow-sm);overflow:hidden}
+.explainer-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.tab-btn{padding:0.75rem 1.25rem;font-size:0.875rem;font-weight:500;border:none;background:none;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all 0.15s;cursor:pointer}
+.tab-btn.active{color:var(--primary);border-bottom-color:var(--primary);background:var(--surface)}
+.tab-content{padding:1.25rem;display:none}
+.tab-content.active{display:block}
+.explainer h3{font-size:0.9375rem;font-weight:700;margin-bottom:0.625rem}
+.explainer p{font-size:0.875rem;color:var(--muted);max-width:70ch;margin-bottom:0.75rem;line-height:1.65}
+.explainer p:last-child{margin-bottom:0}
+.step-list{display:flex;flex-direction:column;gap:0.75rem}
+.step{display:flex;gap:0.75rem;align-items:flex-start}
+.step-num{width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;font-size:0.75rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:0.1rem}
+.step p{margin:0;font-size:0.875rem;color:var(--muted)}
+.step strong{color:var(--text)}
+.formula-box{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-lg);padding:0.875rem 1rem;font-family:var(--font-mono);font-size:0.875rem;margin:0.75rem 0;color:var(--text);line-height:1.8}
+.formula-comment{color:var(--muted);font-size:0.8125rem}
+
+/* Stats bar */
+.stats-bar{display:flex;gap:1rem;flex-wrap:wrap}
+.stat-chip{padding:0.5rem 0.875rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);font-size:0.875rem;box-shadow:var(--shadow-sm)}
+.stat-chip span{font-weight:700;color:var(--primary)}
+
+/* Color swatch */
+.swatch{width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0}
+
+/* Empty state */
+.empty{text-align:center;padding:3rem 1rem;color:var(--muted);font-size:0.875rem}
+
+/* Info toast */
+.toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:0.625rem 1.25rem;border-radius:var(--r-full);font-size:0.875rem;font-weight:500;box-shadow:var(--shadow-lg);opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:100;white-space:nowrap}
+.toast.show{opacity:1}
+
+/* Divider */
+hr{border:none;border-top:1px solid var(--divider)}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--divider);border-radius:3px}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header>
+  <div class="logo">
+    <svg aria-label="Consistent Hashing Visualizer" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="12" cy="12" rx="10" ry="4"/>
+      <path d="M2 12c0 2.21 4.477 4 10 4s10-1.79 10-4"/>
+      <path d="M2 17c0 2.21 4.477 4 10 4s10-1.79 10-4"/>
+    </svg>
+    Consistent Hashing
+  </div>
+  <div class="header-right">
+    <label style="font-size:0.8125rem;color:var(--muted)">Virtual nodes per server:</label>
+    <input type="number" id="vnodes-input" value="3" min="1" max="20" style="width:60px">
+    <button class="btn-icon" data-theme-toggle aria-label="Toggle dark mode">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="main">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+
+    <div>
+      <div class="section-label">Add Server</div>
+      <div class="input-row">
+        <input type="text" id="server-name" placeholder="Server name (e.g. S4)" maxlength="20">
+        <button class="btn btn-primary btn-sm" onclick="addServer()">Add</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Servers <span id="srv-count" style="color:var(--primary)"></span></div>
+      <div class="server-list" id="server-list"></div>
+    </div>
+
+    <hr>
+
+    <div>
+      <div class="section-label">Add Key</div>
+      <div class="input-row">
+        <input type="text" id="key-name" placeholder="Key (e.g. user:42)" maxlength="30">
+        <button class="btn btn-primary btn-sm" onclick="addKey()">Add</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Keys <span id="key-count" style="color:var(--orange)"></span></div>
+      <div class="key-list" id="key-list"></div>
+    </div>
+
+    <hr>
+
+    <div>
+      <div class="section-label">Quick Demo</div>
+      <button class="btn" style="width:100%" onclick="loadDemo()">Load demo data</button>
+    </div>
+
+  </aside>
+
+  <!-- Main content -->
+  <main class="content">
+
+    <div class="stats-bar" id="stats-bar"></div>
+
+    <!-- Hash ring as table -->
+    <div class="ring-table-wrap">
+      <div class="ring-table-header">
+        <h2>Hash Ring — Sorted Position Table</h2>
+        <div style="font-size:0.8125rem;color:var(--muted)">Space: 0 … 1,000,000</div>
+      </div>
+      <div class="ring-table-scroll">
+        <table id="ring-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Raw hash (FNV-1a)</th>
+              <th>Position (mod 1M)</th>
+              <th>Owns keys →</th>
+            </tr>
+          </thead>
+          <tbody id="ring-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Explainer -->
+    <div class="explainer">
+      <div class="explainer-tabs">
+        <button class="tab-btn active" onclick="showTab('how')">How it works</button>
+        <button class="tab-btn" onclick="showTab('vnodes')">Virtual Nodes</button>
+        <button class="tab-btn" onclick="showTab('addremove')">Add / Remove</button>
+        <button class="tab-btn" onclick="showTab('calc')">Hash Calculation</button>
+      </div>
+
+      <div class="tab-content active" id="tab-how">
+        <h3>What is Consistent Hashing?</h3>
+        <p>Consistent hashing maps both <strong>servers</strong> and <strong>data keys</strong> onto the same numeric space (a "ring"). Each key is owned by the first server whose position is ≥ the key's position — going clockwise around the ring.</p>
+        <div class="step-list">
+          <div class="step"><div class="step-num">1</div><p><strong>Hash the server name</strong> → place it at that position on the ring.</p></div>
+          <div class="step"><div class="step-num">2</div><p><strong>Hash each key</strong> → place the key on the ring at its position.</p></div>
+          <div class="step"><div class="step-num">3</div><p><strong>Walk clockwise</strong> from the key's position until you find the next server node. That server owns the key.</p></div>
+          <div class="step"><div class="step-num">4</div><p>When a server is removed, only the keys between it and the previous server are remapped — <strong>not the entire dataset</strong>.</p></div>
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-vnodes">
+        <h3>Virtual Nodes (vnodes)</h3>
+        <p>A single physical server is placed on the ring multiple times using different identifiers (e.g. <code style="font-family:var(--font-mono);font-size:0.875em">S1#0</code>, <code style="font-family:var(--font-mono);font-size:0.875em">S1#1</code>, <code style="font-family:var(--font-mono);font-size:0.875em">S1#2</code>). Each is a <strong>virtual node</strong>.</p>
+        <p>This solves two problems:</p>
+        <p>① <strong>Even distribution</strong> — without vnodes, servers cluster unevenly. With vnodes, load spreads more uniformly.</p>
+        <p>② <strong>Weighted capacity</strong> — a server with twice the RAM gets twice the vnodes, and therefore receives roughly twice the keys.</p>
+        <p>Change the <strong>Virtual nodes per server</strong> slider in the header and watch how the ring table and key assignments change.</p>
+      </div>
+
+      <div class="tab-content" id="tab-addremove">
+        <h3>Adding &amp; Removing Servers</h3>
+        <p><strong>Adding a server</strong>: its vnodes are inserted into the sorted ring. For every new vnode, the keys that were previously owned by the next clockwise server but now fall between a predecessor and the new vnode are reassigned. Only a fraction of total keys move.</p>
+        <p><strong>Removing a server</strong>: its vnodes are removed. Keys owned by those vnodes walk further clockwise to the next surviving node. Again — only the affected keys move.</p>
+        <p>Try it: load the demo, then remove a server with the × button. Watch which keys change their assignment in the table.</p>
+      </div>
+
+      <div class="tab-content" id="tab-calc">
+        <h3>How the Position is Calculated</h3>
+        <p>This visualizer uses <strong>FNV-1a 32-bit</strong> hash, mapped onto a ring of 1,000,000 positions:</p>
+        <div class="formula-box">
+          <div><span class="formula-comment">// FNV-1a 32-bit</span></div>
+          <div>offset_basis = 2166136261</div>
+          <div>prime        = 16777619</div>
+          <div></div>
+          <div>hash = offset_basis</div>
+          <div>for each byte b in input:</div>
+          <div>&nbsp;&nbsp;hash = (hash XOR b) * prime  <span class="formula-comment">// mod 2³²</span></div>
+          <div></div>
+          <div>position = hash mod 1_000_000</div>
+          <div></div>
+          <div><span class="formula-comment">// Server vnode key:</span></div>
+          <div>input = "ServerName#vnodeIndex"</div>
+          <div><span class="formula-comment">// e.g. "S1#0", "S1#1", "S1#2"</span></div>
+          <div></div>
+          <div><span class="formula-comment">// Data key:</span></div>
+          <div>input = keyName  <span class="formula-comment">// e.g. "user:42"</span></div>
+        </div>
+        <p>The raw 32-bit hash value and the final position (mod 1M) are both shown in the ring table so you can verify every step.</p>
+      </div>
+    </div>
+
+  </main>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── Theme toggle ─────────────────────────────────────────────────────────────
+(function(){
+  const btn = document.querySelector('[data-theme-toggle]');
+  const root = document.documentElement;
+  let d = matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
+  root.setAttribute('data-theme', d);
+  const sunSVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`;
+  const moonSVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+  if(btn) btn.addEventListener('click', () => {
+    d = d === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', d);
+    btn.innerHTML = d === 'dark' ? sunSVG : moonSVG;
+  });
+})();
+
+// ─── FNV-1a 32-bit ────────────────────────────────────────────────────────────
+function fnv1a(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+    h >>>= 0; // keep unsigned 32-bit
+  }
+  return h;
+}
+const RING_SIZE = 1_000_000;
+
+function hashPos(str) {
+  return { raw: fnv1a(str), pos: fnv1a(str) % RING_SIZE };
+}
+
+// ─── State ────────────────────────────────────────────────────────────────────
+const SERVER_COLORS = [
+  { dot: '#01696f', badge_bg: 'var(--primary-hi)', badge_text: 'var(--primary)' },
+  { dot: '#006494', badge_bg: 'var(--blue-hi)',    badge_text: 'var(--blue)'    },
+  { dot: '#da7101', badge_bg: 'var(--orange-hi)',  badge_text: 'var(--orange)'  },
+  { dot: '#7a39bb', badge_bg: 'var(--purple-hi)',  badge_text: 'var(--purple)'  },
+  { dot: '#437a22', badge_bg: 'var(--green-hi)',   badge_text: 'var(--green)'   },
+  { dot: '#a13544', badge_bg: 'var(--red-hi)',     badge_text: 'var(--red)'     },
+];
+
+let servers = []; // { name, colorIdx }
+let keys    = []; // { name }
+let vnodeCount = 3;
+
+// ─── Core: build sorted ring ──────────────────────────────────────────────────
+function buildRing() {
+  const ring = [];
+  servers.forEach(s => {
+    for (let i = 0; i < vnodeCount; i++) {
+      const label = `${s.name}#${i}`;
+      const { raw, pos } = hashPos(label);
+      ring.push({ kind: i === 0 ? 'server' : 'vnode', serverName: s.name, label, raw, pos, colorIdx: s.colorIdx });
+    }
+  });
+  ring.sort((a, b) => a.pos - b.pos);
+  return ring;
+}
+
+// For a given key position, find its owner on the ring
+function findOwner(ring, keyPos) {
+  if (ring.length === 0) return null;
+  for (const node of ring) {
+    if (keyPos <= node.pos) return node.serverName;
+  }
+  return ring[0].serverName; // wrap-around
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+function render() {
+  vnodeCount = parseInt(document.getElementById('vnodes-input').value) || 1;
+  const ring = buildRing();
+
+  // Key positions
+  const keyData = keys.map(k => {
+    const { raw, pos } = hashPos(k.name);
+    const owner = findOwner(ring, pos);
+    return { name: k.name, raw, pos, owner };
+  });
+
+  renderServerList(ring);
+  renderKeyList(keyData);
+  renderRingTable(ring, keyData);
+  renderStats(ring, keyData);
+}
+
+function getColor(colorIdx) {
+  return SERVER_COLORS[colorIdx % SERVER_COLORS.length];
+}
+
+function renderServerList(ring) {
+  const el = document.getElementById('server-list');
+  document.getElementById('srv-count').textContent = `(${servers.length})`;
+  if (servers.length === 0) { el.innerHTML = '<div class="empty">No servers added</div>'; return; }
+  el.innerHTML = servers.map(s => {
+    const c = getColor(s.colorIdx);
+    const myNodes = ring.filter(n => n.serverName === s.name).length;
+    return `<div class="server-chip">
+      <span class="dot" style="background:${c.dot}"></span>
+      <span class="name">${esc(s.name)}</span>
+      <span class="vnodes">${myNodes} nodes</span>
+      <button class="btn btn-sm btn-danger" onclick="removeServer('${esc(s.name)}')" style="padding:0.125rem 0.5rem;font-size:0.75rem">×</button>
+    </div>`;
+  }).join('');
+}
+
+function renderKeyList(keyData) {
+  const el = document.getElementById('key-list');
+  document.getElementById('key-count').textContent = `(${keys.length})`;
+  if (keys.length === 0) { el.innerHTML = '<div class="empty">No keys added</div>'; return; }
+  el.innerHTML = keyData.map(k => {
+    const srv = servers.find(s => s.name === k.owner);
+    const c = srv ? getColor(srv.colorIdx) : null;
+    const badge = c ? `<span class="key-srv" style="background:${c.badge_bg};color:${c.badge_text}">${esc(k.owner)}</span>` : '<span class="key-srv">none</span>';
+    return `<div class="key-chip">
+      <span class="key-name">${esc(k.name)}</span>
+      <span class="key-hash">${k.pos.toLocaleString()}</span>
+      ${badge}
+      <button class="btn btn-sm" style="padding:0.125rem 0.4rem;font-size:0.75rem;color:var(--muted)" onclick="removeKey('${esc(k.name)}')">×</button>
+    </div>`;
+  }).join('');
+}
+
+function renderRingTable(ring, keyData) {
+  const tbody = document.getElementById('ring-tbody');
+  if (ring.length === 0 && keyData.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty">Add servers and keys to see the hash ring</div></td></tr>`;
+    return;
+  }
+
+  // Build merged sorted list: ring nodes + key entries
+  const merged = [];
+  ring.forEach(n => merged.push({ ...n, _type: 'node' }));
+  keyData.forEach(k => merged.push({ kind: 'data', label: k.name, raw: k.raw, pos: k.pos, owner: k.owner, _type: 'key' }));
+  merged.sort((a, b) => a.pos - b.pos || (a._type === 'node' ? -1 : 1));
+
+  // Build ownership spans: for each ring node, what data keys does it own?
+  const ownershipMap = {};
+  ring.forEach(n => { ownershipMap[n.label] = []; });
+  keyData.forEach(k => {
+    // find the exact ring node that owns it
+    if (ring.length === 0) return;
+    let ownerNode = ring.find(n => k.pos <= n.pos);
+    if (!ownerNode) ownerNode = ring[0];
+    if (ownershipMap[ownerNode.label] !== undefined) ownershipMap[ownerNode.label].push(k.name);
+  });
+
+  let html = '';
+  let idx = 1;
+  merged.forEach(row => {
+    if (row._type === 'node') {
+      const c = getColor(row.colorIdx);
+      const type = row.kind === 'server' ? 'server' : 'vnode';
+      const typeBadge = `<span class="type-badge type-${type}">${type === 'server' ? '⬤ server' : '◎ vnode'}</span>`;
+      const owned = ownershipMap[row.label] || [];
+      const ownedBadges = owned.length > 0
+        ? owned.map(k => `<span class="owns-badge" style="background:var(--orange-hi);color:var(--orange)">${esc(k)}</span>`).join(' ')
+        : `<span style="color:var(--faint);font-family:var(--font-body);font-size:0.8125rem">—</span>`;
+      html += `<tr class="highlight-row">
+        <td style="color:var(--muted)">${idx++}</td>
+        <td style="font-weight:600;color:${c.dot}">${esc(row.label)}</td>
+        <td>${typeBadge}</td>
+        <td class="hash-val">${row.raw.toLocaleString()}</td>
+        <td class="position-val">${row.pos.toLocaleString()}</td>
+        <td>${ownedBadges}</td>
+      </tr>`;
+    } else {
+      const srv = servers.find(s => s.name === row.owner);
+      const c = srv ? getColor(srv.colorIdx) : null;
+      const ownerBadge = c
+        ? `<span class="type-badge" style="background:${c.badge_bg};color:${c.badge_text}">→ ${esc(row.owner)}</span>`
+        : '<span class="type-badge" style="background:var(--surface-3);color:var(--muted)">unassigned</span>';
+      html += `<tr class="data-row">
+        <td style="color:var(--muted)">${idx++}</td>
+        <td style="font-weight:600">${esc(row.label)}</td>
+        <td><span class="type-badge type-data">key</span></td>
+        <td class="hash-val">${row.raw.toLocaleString()}</td>
+        <td class="position-val">${row.pos.toLocaleString()}</td>
+        <td>${ownerBadge}</td>
+      </tr>`;
+    }
+  });
+
+  tbody.innerHTML = html;
+}
+
+function renderStats(ring, keyData) {
+  const statsBar = document.getElementById('stats-bar');
+  if (servers.length === 0) { statsBar.innerHTML = ''; return; }
+  const totalNodes = ring.length;
+  const distribution = {};
+  servers.forEach(s => distribution[s.name] = 0);
+  keyData.forEach(k => { if (k.owner && distribution[k.owner] !== undefined) distribution[k.owner]++; });
+
+  let html = `<div class="stat-chip">Ring nodes: <span>${totalNodes}</span></div>`;
+  html += `<div class="stat-chip">Total keys: <span>${keys.length}</span></div>`;
+  servers.forEach(s => {
+    const c = getColor(s.colorIdx);
+    html += `<div class="stat-chip"><span class="swatch" style="background:${c.dot}"></span> ${esc(s.name)}: <span style="color:${c.dot}">${distribution[s.name]} keys</span></div>`;
+  });
+  statsBar.innerHTML = html;
+}
+
+// ─── Actions ──────────────────────────────────────────────────────────────────
+function addServer() {
+  const input = document.getElementById('server-name');
+  const name = input.value.trim();
+  if (!name) return;
+  if (servers.find(s => s.name === name)) { toast(`Server "${name}" already exists`); return; }
+  servers.push({ name, colorIdx: servers.length });
+  input.value = '';
+  render();
+}
+
+function removeServer(name) {
+  servers = servers.filter(s => s.name !== name);
+  render();
+}
+
+function addKey() {
+  const input = document.getElementById('key-name');
+  const name = input.value.trim();
+  if (!name) return;
+  if (keys.find(k => k.name === name)) { toast(`Key "${name}" already exists`); return; }
+  keys.push({ name });
+  input.value = '';
+  render();
+}
+
+function removeKey(name) {
+  keys = keys.filter(k => k.name !== name);
+  render();
+}
+
+function loadDemo() {
+  servers = [
+    { name: 'S1', colorIdx: 0 },
+    { name: 'S2', colorIdx: 1 },
+    { name: 'S3', colorIdx: 2 },
+  ];
+  keys = [
+    { name: 'user:1'    },
+    { name: 'user:42'   },
+    { name: 'session:A' },
+    { name: 'product:7' },
+    { name: 'cart:99'   },
+    { name: 'order:123' },
+  ];
+  document.getElementById('vnodes-input').value = 3;
+  vnodeCount = 3;
+  render();
+  toast('Demo data loaded');
+}
+
+function showTab(id) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  document.querySelector(`.tab-btn[onclick="showTab('${id}')"]`).classList.add('active');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ─── Events ───────────────────────────────────────────────────────────────────
+document.getElementById('vnodes-input').addEventListener('input', render);
+document.getElementById('server-name').addEventListener('keydown', e => { if(e.key==='Enter') addServer(); });
+document.getElementById('key-name').addEventListener('keydown', e => { if(e.key==='Enter') addKey(); });
+
+// Init
+loadDemo();
+</script>
+</body>
+</html>
