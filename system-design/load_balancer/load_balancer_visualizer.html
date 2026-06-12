@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Load Balancing Visualizer</title>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+    <style>
+        :root, [data-theme="light"] {
+            --color-bg: #f7f6f2;
+            --color-surface: #ffffff;
+            --color-surface-2: #f3f0ec;
+            --color-border: #d4d1ca;
+            --color-text: #28251d;
+            --color-text-muted: #7a7974;
+            --color-primary: #01696f;
+            --color-primary-hover: #0c4e54;
+            --color-success: #437a22;
+            --color-blue: #006494;
+            --color-orange: #da7101;
+            --color-purple: #7a39bb;
+            --radius-md: 0.5rem;
+            --radius-lg: 0.75rem;
+            --shadow-sm: 0 1px 2px oklch(0.2 0.01 80 / 0.06);
+            --shadow-md: 0 4px 12px oklch(0.2 0.01 80 / 0.08);
+            --font-body: 'Satoshi', sans-serif;
+            --space-2: 0.5rem;
+            --space-4: 1rem;
+            --space-6: 1.5rem;
+            --space-8: 2rem;
+        }
+
+        [data-theme="dark"] {
+            --color-bg: #171614;
+            --color-surface: #1c1b19;
+            --color-surface-2: #22211f;
+            --color-border: #393836;
+            --color-text: #cdccca;
+            --color-text-muted: #797876;
+            --color-primary: #4f98a3;
+            --color-primary-hover: #227f8b;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            padding: var(--space-4) var(--space-8);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--color-border);
+            background: var(--color-surface);
+        }
+
+        h1 { font-size: 1.25rem; font-weight: 700; }
+
+        button {
+            font-family: inherit;
+            background: var(--color-surface-2);
+            border: 1px solid var(--color-border);
+            color: var(--color-text);
+            padding: 0.375rem 0.75rem;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        button:hover { background: var(--color-border); }
+
+        button.btn-primary {
+            background: var(--color-primary);
+            color: white;
+            border-color: var(--color-primary);
+        }
+        button.btn-primary:hover {
+            background: var(--color-primary-hover);
+        }
+
+        select {
+            padding: 0.375rem;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text);
+            font-family: inherit;
+            font-size: 0.875rem;
+        }
+
+        .main-layout {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: var(--color-surface);
+            border-right: 1px solid var(--color-border);
+            padding: var(--space-6);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-6);
+            overflow-y: auto;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-2);
+        }
+
+        .control-group label {
+            font-size: 0.875rem;
+            font-weight: 700;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .canvas-wrapper {
+            flex: 1;
+            position: relative;
+            padding: var(--space-8);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            overflow: hidden;
+        }
+
+        .node {
+            background: var(--color-surface);
+            border: 2px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-4);
+            box-shadow: var(--shadow-md);
+            text-align: center;
+            position: relative;
+            z-index: 10;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .node h3 { font-size: 1rem; margin-bottom: var(--space-2); }
+
+        .client-node { width: 120px; }
+        .lb-node { width: 160px; border-color: var(--color-primary); }
+
+        .servers-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-4);
+        }
+
+        .server-node {
+            width: 220px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .server-node.active {
+            border-color: var(--color-success);
+            transform: scale(1.02);
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            background: var(--color-surface-2);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .packet {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--color-primary);
+            color: white;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            box-shadow: var(--shadow-sm);
+            pointer-events: none;
+        }
+
+        .log-panel {
+            margin-top: auto;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            background: var(--color-surface-2);
+            padding: var(--space-2);
+            font-family: monospace;
+            font-size: 0.75rem;
+            height: 150px;
+            overflow-y: auto;
+        }
+        .log-entry { margin-bottom: 2px; }
+
+        /* Specific server colors */
+        .srv-A { border-top: 4px solid var(--color-blue); }
+        .srv-B { border-top: 4px solid var(--color-success); }
+        .srv-C { border-top: 4px solid var(--color-orange); }
+        .srv-D { border-top: 4px solid var(--color-purple); }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Load Balancing Visualizer</h1>
+        <button id="theme-toggle">Toggle Dark Mode</button>
+    </header>
+
+    <div class="main-layout">
+        <div class="sidebar">
+            <div class="control-group">
+                <label>Algorithm</label>
+                <select id="algo-select">
+                    <option value="round-robin">Round Robin</option>
+                    <option value="weighted">Weighted Round Robin</option>
+                    <option value="least-connections">Least Connections</option>
+                    <option value="consistent-hashing">Consistent Hashing</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Manual Control</label>
+                <button class="btn-primary" id="btn-request">Send Request</button>
+            </div>
+
+            <div class="control-group">
+                <label>Simulation Traffic</label>
+                <button id="btn-auto">Start Auto Traffic</button>
+            </div>
+
+            <div class="control-group">
+                <label>Server Weights (For WRR)</label>
+                <div class="stat-row"><span>Srv A:</span><input type="number" id="w-A" value="3" min="1" max="10" style="width:50px"></div>
+                <div class="stat-row"><span>Srv B:</span><input type="number" id="w-B" value="2" min="1" max="10" style="width:50px"></div>
+                <div class="stat-row"><span>Srv C:</span><input type="number" id="w-C" value="1" min="1" max="10" style="width:50px"></div>
+                <div class="stat-row"><span>Srv D:</span><input type="number" id="w-D" value="1" min="1" max="10" style="width:50px"></div>
+            </div>
+
+            <div class="control-group">
+                <button id="btn-reset">Reset Stats</button>
+            </div>
+
+            <div class="log-panel" id="log-panel">
+                <div class="log-entry">System ready.</div>
+            </div>
+        </div>
+
+        <div class="canvas-wrapper" id="canvas">
+            <div class="node client-node" id="client">
+                <h3>Clients</h3>
+                <div style="font-size: 2rem;">🌐</div>
+            </div>
+
+            <div class="node lb-node" id="lb">
+                <h3>Load Balancer</h3>
+                <div id="lb-algo-label" style="font-size: 0.75rem; color: var(--color-text-muted);">Round Robin</div>
+            </div>
+
+            <div class="servers-container" id="servers">
+                <!-- Rendered via JS -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Theme toggle
+        const toggleBtn = document.getElementById('theme-toggle');
+        toggleBtn.addEventListener('click', () => {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+        });
+
+        // State
+        let servers = [
+            { id: 'A', class: 'srv-A', weight: 3, active: 0, total: 0 },
+            { id: 'B', class: 'srv-B', weight: 2, active: 0, total: 0 },
+            { id: 'C', class: 'srv-C', weight: 1, active: 0, total: 0 },
+            { id: 'D', class: 'srv-D', weight: 1, active: 0, total: 0 }
+        ];
+
+        let reqId = 1;
+        let rrIndex = 0;
+        let wrrIndex = 0;
+        let wrrSequence = [];
+        let autoInterval = null;
+
+        // DOM Elements
+        const serversContainer = document.getElementById('servers');
+        const canvas = document.getElementById('canvas');
+        const clientEl = document.getElementById('client');
+        const lbEl = document.getElementById('lb');
+        const logPanel = document.getElementById('log-panel');
+        const algoSelect = document.getElementById('algo-select');
+
+        function log(msg) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerText = `> ${msg}`;
+            logPanel.prepend(entry);
+        }
+
+        function updateServerDOM() {
+            serversContainer.innerHTML = '';
+            servers.forEach((s) => {
+                const wInput = document.getElementById(`w-${s.id}`);
+                if(wInput) s.weight = parseInt(wInput.value) || 1;
+
+                const el = document.createElement('div');
+                el.className = `node server-node ${s.class}`;
+                el.id = `server-${s.id}`;
+                el.innerHTML = `
+                    <h3>Server ${s.id}</h3>
+                    <div class="stat-row"><span>Weight:</span> <span>${s.weight}</span></div>
+                    <div class="stat-row"><span>Active Conns:</span> <strong>${s.active}</strong></div>
+                    <div class="stat-row"><span>Total Reqs:</span> <span>${s.total}</span></div>
+                `;
+                serversContainer.appendChild(el);
+            });
+            buildWrrSequence();
+        }
+
+        function buildWrrSequence() {
+            wrrSequence = [];
+            servers.forEach(s => {
+                for(let i=0; i<s.weight; i++) wrrSequence.push(s.id);
+            });
+        }
+
+        function simpleHash(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; 
+            }
+            return Math.abs(hash);
+        }
+
+        function getTargetServer(ip) {
+            const algo = algoSelect.value;
+            let target;
+
+            if (algo === 'round-robin') {
+                target = servers[rrIndex];
+                rrIndex = (rrIndex + 1) % servers.length;
+            } 
+            else if (algo === 'weighted') {
+                if (wrrSequence.length === 0) buildWrrSequence();
+                target = servers.find(s => s.id === wrrSequence[wrrIndex]);
+                wrrIndex = (wrrIndex + 1) % wrrSequence.length;
+            } 
+            else if (algo === 'least-connections') {
+                target = servers.reduce((min, s) => s.active < min.active ? s : min, servers[0]);
+            } 
+            else if (algo === 'consistent-hashing') {
+                const hash = simpleHash(ip);
+                // Simple mod representation of the ring
+                const idx = hash % servers.length;
+                target = servers[idx];
+            }
+
+            return target;
+        }
+
+        function animatePacket(startEl, endEl, rId, duration, onComplete) {
+            const packet = document.createElement('div');
+            packet.className = 'packet';
+            packet.innerText = rId;
+            canvas.appendChild(packet);
+
+            const startRect = startEl.getBoundingClientRect();
+            const endRect = endEl.getBoundingClientRect();
+            const canvasRect = canvas.getBoundingClientRect();
+
+            const startX = startRect.left - canvasRect.left + startRect.width/2 - 10;
+            const startY = startRect.top - canvasRect.top + startRect.height/2 - 10;
+
+            const dx = endRect.left - startRect.left;
+            const dy = endRect.top - startRect.top;
+
+            packet.style.left = startX + 'px';
+            packet.style.top = startY + 'px';
+
+            const anim = packet.animate([
+                { transform: 'translate(0, 0)' },
+                { transform: `translate(${dx}px, ${dy}px)` }
+            ], { duration: duration, easing: 'ease-in-out' });
+
+            anim.onfinish = () => {
+                packet.remove();
+                if(onComplete) onComplete();
+            };
+        }
+
+        function sendRequest() {
+            const currentReqId = reqId++;
+            // Generate random fake IP for hashing
+            const ip = `${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}.0.1`;
+
+            log(`Req #${currentReqId} (${ip}) initiated`);
+
+            // 1. Client -> LB
+            animatePacket(clientEl, lbEl, currentReqId, 400, () => {
+                // Determine target at the LB
+                const target = getTargetServer(ip);
+                log(`LB routing Req #${currentReqId} to Server ${target.id}`);
+                const serverEl = document.getElementById(`server-${target.id}`);
+
+                // 2. LB -> Server
+                animatePacket(lbEl, serverEl, currentReqId, 400, () => {
+                    // Arrived at server
+                    target.active++;
+                    target.total++;
+                    updateServerDOM();
+                    serverEl.classList.add('active');
+
+                    // Simulate processing time
+                    const processTime = 1000 + Math.random() * 2000; // 1-3 seconds
+
+                    setTimeout(() => {
+                        target.active--;
+                        updateServerDOM();
+                        serverEl.classList.remove('active');
+                        log(`Req #${currentReqId} finished on Server ${target.id}`);
+                    }, processTime);
+                });
+            });
+        }
+
+        document.getElementById('btn-request').addEventListener('click', sendRequest);
+
+        document.getElementById('btn-auto').addEventListener('click', (e) => {
+            if (autoInterval) {
+                clearInterval(autoInterval);
+                autoInterval = null;
+                e.target.innerText = 'Start Auto Traffic';
+                e.target.classList.remove('btn-primary');
+            } else {
+                sendRequest(); // send one immediately
+                autoInterval = setInterval(sendRequest, 600); // 1.5 req/sec
+                e.target.innerText = 'Stop Auto Traffic';
+                e.target.classList.add('btn-primary');
+            }
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            servers.forEach(s => { s.active = 0; s.total = 0; });
+            reqId = 1;
+            rrIndex = 0;
+            wrrIndex = 0;
+            logPanel.innerHTML = '';
+            log('Stats reset.');
+            updateServerDOM();
+        });
+
+        algoSelect.addEventListener('change', (e) => {
+            document.getElementById('lb-algo-label').innerText = e.target.options[e.target.selectedIndex].text;
+            log(`Algorithm changed to ${e.target.value}`);
+        });
+
+        // Watch weight changes
+        ['A','B','C','D'].forEach(id => {
+            document.getElementById(`w-${id}`).addEventListener('change', updateServerDOM);
+        });
+
+        // Initialize
+        updateServerDOM();
+
+    </script>
+</body>
+</html>
