@@ -144,6 +144,33 @@ table tr.data-row td{background:color-mix(in oklch,var(--orange) 7%,var(--surfac
 /* Empty state */
 .empty{text-align:center;padding:3rem 1rem;color:var(--muted);font-size:0.875rem}
 
+
+/* History panel */
+.history-panel{background:var(--surface);border-radius:var(--r-xl);border:1px solid var(--border);box-shadow:var(--shadow-sm);overflow:hidden}
+.history-header{padding:0.875rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface-2)}
+.history-header h2{font-size:0.9375rem;font-weight:700}
+.history-list{max-height:320px;overflow-y:auto}
+.history-empty{text-align:center;padding:2rem 1rem;color:var(--muted);font-size:0.875rem}
+.history-entry{display:flex;gap:0.75rem;align-items:flex-start;padding:0.75rem 1.25rem;border-bottom:1px solid var(--border);animation:fadeSlide 0.25s ease}
+.history-entry:last-child{border-bottom:none}
+@keyframes fadeSlide{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.history-icon{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem;flex-shrink:0;margin-top:0.1rem;font-weight:700}
+.h-add-srv{background:var(--primary-hi);color:var(--primary)}
+.h-rem-srv{background:var(--red-hi);color:var(--red)}
+.h-add-key{background:var(--orange-hi);color:var(--orange)}
+.h-rem-key{background:var(--surface-3);color:var(--muted)}
+.h-vnode{background:var(--blue-hi);color:var(--blue)}
+.h-demo{background:var(--purple-hi);color:var(--purple)}
+.history-body{flex:1;min-width:0}
+.history-action{font-size:0.875rem;font-weight:600;color:var(--text);font-family:var(--font-body)}
+.history-detail{font-size:0.8125rem;color:var(--muted);margin-top:0.125rem;line-height:1.5}
+.history-time{font-size:0.75rem;color:var(--faint);white-space:nowrap;margin-top:0.2rem;font-family:var(--font-mono)}
+.move-tag{display:inline-flex;align-items:center;gap:0.25rem;padding:0.1rem 0.4rem;border-radius:var(--r-sm);font-size:0.75rem;font-family:var(--font-mono);font-weight:600;background:var(--surface-3)}
+.move-from{color:var(--red)}
+.move-to{color:var(--primary)}
+.moves-list{margin-top:0.375rem;display:flex;flex-wrap:wrap;gap:0.25rem}
+.history-count{font-size:0.6875rem;background:var(--surface-3);color:var(--muted);padding:0.1rem 0.5rem;border-radius:var(--r-full);font-weight:600}
+
 /* Info toast */
 .toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:0.625rem 1.25rem;border-radius:var(--r-full);font-size:0.875rem;font-weight:500;box-shadow:var(--shadow-lg);opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:100;white-space:nowrap}
 .toast.show{opacity:1}
@@ -305,6 +332,21 @@ hr{border:none;border-top:1px solid var(--divider)}
           <div>input = keyName  <span class="formula-comment">// e.g. "user:42"</span></div>
         </div>
         <p>The raw 32-bit hash value and the final position (mod 1M) are both shown in the ring table so you can verify every step.</p>
+      </div>
+    </div>
+
+
+    <!-- History panel -->
+    <div class="history-panel">
+      <div class="history-header">
+        <h2>Action History</h2>
+        <div style="display:flex;align-items:center;gap:0.75rem">
+          <span class="history-count" id="history-count">0 events</span>
+          <button class="btn btn-sm" onclick="clearHistory()">Clear</button>
+        </div>
+      </div>
+      <div class="history-list" id="history-list">
+        <div class="history-empty">No actions yet — add or remove servers and keys.</div>
       </div>
     </div>
 
@@ -518,20 +560,108 @@ function renderStats(ring, keyData) {
   statsBar.innerHTML = html;
 }
 
+
+// ─── History ──────────────────────────────────────────────────────────────────
+let historyLog = []; // { type, icon, action, detail, time, moves }
+
+function getKeyOwnerMap() {
+  const ring = buildRing();
+  const map = {};
+  keys.forEach(k => {
+    const { pos } = hashPos(k.name);
+    map[k.name] = findOwner(ring, pos);
+  });
+  return map;
+}
+
+function diffMoves(before, after) {
+  // Returns array of { key, from, to } where from !== to
+  const moves = [];
+  Object.keys(after).forEach(k => {
+    const f = before[k];
+    const t = after[k];
+    if (f && t && f !== t) moves.push({ key: k, from: f, to: t });
+  });
+  return moves;
+}
+
+function pushHistory(entry) {
+  historyLog.unshift(entry); // newest first
+  renderHistory();
+}
+
+function renderHistory() {
+  const el = document.getElementById('history-list');
+  const count = document.getElementById('history-count');
+  count.textContent = historyLog.length + (historyLog.length === 1 ? ' event' : ' events');
+  if (historyLog.length === 0) {
+    el.innerHTML = '<div class="history-empty">No actions yet — add or remove servers and keys.</div>';
+    return;
+  }
+  el.innerHTML = historyLog.map(e => {
+    let movesHtml = '';
+    if (e.moves && e.moves.length > 0) {
+      const tags = e.moves.map(m =>
+        `<span class="move-tag"><span class="move-from">${esc(m.key)}</span> <span style="color:var(--faint)">&#8594;</span> <span class="move-to">${esc(m.to)}</span> <span style="color:var(--faint);font-size:0.7rem">(was ${esc(m.from)})</span></span>`
+      ).join('');
+      movesHtml = `<div class="moves-list">${tags}</div>`;
+    } else if (e.moves && e.moves.length === 0 && e.showNoMoves) {
+      movesHtml = `<div style="font-size:0.75rem;color:var(--faint);margin-top:0.25rem">No keys were remapped</div>`;
+    }
+    return `<div class="history-entry">
+      <div class="history-icon ${e.icon}">${e.iconChar}</div>
+      <div class="history-body">
+        <div class="history-action">${e.action}</div>
+        <div class="history-detail">${e.detail}${movesHtml}</div>
+      </div>
+      <div class="history-time">${e.time}</div>
+    </div>`;
+  }).join('');
+}
+
+function clearHistory() {
+  historyLog = [];
+  renderHistory();
+}
+
+function nowStr() {
+  const d = new Date();
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+}
+
 // ─── Actions ──────────────────────────────────────────────────────────────────
 function addServer() {
   const input = document.getElementById('server-name');
   const name = input.value.trim();
   if (!name) return;
   if (servers.find(s => s.name === name)) { toast(`Server "${name}" already exists`); return; }
+  const before = getKeyOwnerMap();
   servers.push({ name, colorIdx: servers.length });
-  input.value = '';
   render();
+  const after = getKeyOwnerMap();
+  const moves = diffMoves(before, after);
+  pushHistory({
+    icon: 'h-add-srv', iconChar: '+S',
+    action: `Added server "${name}"`,
+    detail: `${vnodeCount} vnode${vnodeCount !== 1 ? 's' : ''} placed on ring. ${moves.length > 0 ? moves.length + ' key' + (moves.length !== 1 ? 's' : '') + ' remapped.' : 'No keys remapped.'}`,
+    moves, showNoMoves: true, time: nowStr()
+  });
+  input.value = '';
 }
 
 function removeServer(name) {
+  const before = getKeyOwnerMap();
+  const removedNodes = buildRing().filter(n => n.serverName === name).length;
   servers = servers.filter(s => s.name !== name);
   render();
+  const after = getKeyOwnerMap();
+  const moves = diffMoves(before, after);
+  pushHistory({
+    icon: 'h-rem-srv', iconChar: '−S',
+    action: `Removed server "${name}"`,
+    detail: `${removedNodes} vnode${removedNodes !== 1 ? 's' : ''} removed from ring. ${moves.length > 0 ? moves.length + ' key' + (moves.length !== 1 ? 's' : '') + ' remapped.' : 'No keys were remapped.'}`,
+    moves, showNoMoves: true, time: nowStr()
+  });
 }
 
 function addKey() {
@@ -540,13 +670,31 @@ function addKey() {
   if (!name) return;
   if (keys.find(k => k.name === name)) { toast(`Key "${name}" already exists`); return; }
   keys.push({ name });
-  input.value = '';
   render();
+  const ring = buildRing();
+  const { pos } = hashPos(name);
+  const owner = findOwner(ring, pos);
+  pushHistory({
+    icon: 'h-add-key', iconChar: '+K',
+    action: `Added key "${name}"`,
+    detail: owner ? `Assigned to server <strong>${esc(owner)}</strong> at position ${pos.toLocaleString()}.` : 'No servers available — key is unassigned.',
+    moves: null, time: nowStr()
+  });
+  input.value = '';
 }
 
 function removeKey(name) {
+  const ring = buildRing();
+  const { pos } = hashPos(name);
+  const owner = findOwner(ring, pos);
   keys = keys.filter(k => k.name !== name);
   render();
+  pushHistory({
+    icon: 'h-rem-key', iconChar: '−K',
+    action: `Removed key "${name}"`,
+    detail: owner ? `Was assigned to server <strong>${esc(owner)}</strong>.` : 'Was unassigned.',
+    moves: null, time: nowStr()
+  });
 }
 
 function loadDemo() {
@@ -566,6 +714,17 @@ function loadDemo() {
   document.getElementById('vnodes-input').value = 3;
   vnodeCount = 3;
   render();
+  const ring = buildRing();
+  const assignments = keys.map(k => {
+    const { pos } = hashPos(k.name);
+    return `${k.name} → ${findOwner(ring, pos)}`;
+  }).join(', ');
+  pushHistory({
+    icon: 'h-demo', iconChar: '★',
+    action: 'Demo data loaded',
+    detail: `3 servers (S1, S2, S3), 6 keys, 3 vnodes each. Initial assignments: ${assignments}.`,
+    moves: null, time: nowStr()
+  });
   toast('Demo data loaded');
 }
 
@@ -590,7 +749,22 @@ function toast(msg) {
 }
 
 // ─── Events ───────────────────────────────────────────────────────────────────
-document.getElementById('vnodes-input').addEventListener('input', render);
+document.getElementById('vnodes-input').addEventListener('input', () => {
+  const before = getKeyOwnerMap();
+  const oldCount = vnodeCount;
+  render();
+  const newCount = vnodeCount;
+  if (oldCount !== newCount && servers.length > 0) {
+    const after = getKeyOwnerMap();
+    const moves = diffMoves(before, after);
+    pushHistory({
+      icon: 'h-vnode', iconChar: 'VN',
+      action: `Virtual nodes changed: ${oldCount} → ${newCount}`,
+      detail: `Each of ${servers.length} server${servers.length !== 1 ? 's' : ''} now has ${newCount} vnode${newCount !== 1 ? 's' : ''}. ${moves.length > 0 ? moves.length + ' key' + (moves.length !== 1 ? 's' : '') + ' remapped.' : 'No keys remapped.'}`,
+      moves, showNoMoves: false, time: nowStr()
+    });
+  }
+});
 document.getElementById('server-name').addEventListener('keydown', e => { if(e.key==='Enter') addServer(); });
 document.getElementById('key-name').addEventListener('keydown', e => { if(e.key==='Enter') addKey(); });
 
