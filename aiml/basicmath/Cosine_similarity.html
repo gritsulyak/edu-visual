@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Cosine Similarity Visualizer</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #1e1e2e;
+            color: #cdd6f4;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h2 { margin-bottom: 5px; }
+        .subtitle { color: #a6adc8; margin-bottom: 20px; font-size: 0.9rem; }
+        .container {
+            display: flex;
+            gap: 25px;
+            max-width: 1000px;
+            width: 100%;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .visual-column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        canvas {
+            border: 2px solid #45475a;
+            background: #11111b;
+            border-radius: 8px;
+            cursor: crosshair;
+        }
+        .panel {
+            background: #181825;
+            border: 2px solid #45475a;
+            border-radius: 8px;
+            padding: 20px;
+            flex: 1;
+            min-width: 320px;
+            box-sizing: border-box;
+        }
+        .panel-section {
+            margin-bottom: 20px;
+            border-bottom: 1px solid #313244;
+            padding-bottom: 15px;
+        }
+        .panel-section:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+            margin-bottom: 0;
+        }
+        .section-title {
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .input-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        label { font-weight: bold; font-size: 0.9rem; }
+        input[type="number"] {
+            background: #313244;
+            border: 1px solid #45475a;
+            color: #cdd6f4;
+            padding: 6px;
+            border-radius: 4px;
+            width: 60px;
+            font-family: monospace;
+        }
+        .math-box {
+            font-family: monospace;
+            background: #11111b;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            overflow-x: auto;
+            border-left: 4px solid #f9e2af;
+        }
+        .highlight-a { color: #a6e3a1; }
+        .highlight-b { color: #89b4fa; }
+        .highlight-sim { color: #f9e2af; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h2>Cosine Similarity Visualizer</h2>
+    <div class="subtitle">Click and drag inside the canvas or type coordinates in the panel</div>
+
+    <div class="container">
+        <!-- Interactive Canvas Map -->
+        <div class="visual-column">
+            <canvas id="simCanvas" width="400" height="400"></canvas>
+        </div>
+
+        <!-- Control & Explanation Side Panel -->
+        <div class="panel">
+            <!-- Vector Coordinate Controls -->
+            <div class="panel-section">
+                <div class="section-title">📥 Vector Controls</div>
+                <div class="input-row">
+                    <span class="highlight-a" style="width: 75px; font-weight: bold;">Vector A:</span>
+                    <div class="input-group">
+                        <label for="ax">X</label>
+                        <input type="number" id="ax" value="120" step="5">
+                    </div>
+                    <div class="input-group">
+                        <label for="ay">Y</label>
+                        <input type="number" id="ay" value="0" step="5">
+                    </div>
+                </div>
+                <div class="input-row">
+                    <span class="highlight-b" style="width: 75px; font-weight: bold;">Vector B:</span>
+                    <div class="input-group">
+                        <label for="bx">X</label>
+                        <input type="number" id="bx" value="80" step="5">
+                    </div>
+                    <div class="input-group">
+                        <label for="by">Y</label>
+                        <input type="number" id="by" value="80" step="5">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mathematical Breakdown Terminal -->
+            <div class="panel-section">
+                <div class="section-title">🧮 Step-by-Step Calculation</div>
+                <p style="margin: 0 0 10px 0; font-size: 0.85rem; color: #a6adc8;">
+                    Formula: cos(θ) = (A · B) / (||A|| × ||B||)
+                </p>
+                <div class="math-box" id="stepByStepText"></div>
+            </div>
+        </div>
+    </div>
+
+<script>
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+const center = { x: canvas.width / 2, y: canvas.height / 2 };
+
+const inputAx = document.getElementById('ax');
+const inputAy = document.getElementById('ay');
+const inputBx = document.getElementById('bx');
+const inputBy = document.getElementById('by');
+const stepByStepText = document.getElementById('stepByStepText');
+
+let isDragging = false;
+
+// Maintain canvas-native vector state
+let vecA = { x: parseFloat(inputAx.value), y: -parseFloat(inputAy.value) };
+let vecB = { x: parseFloat(inputBx.value), y: -parseFloat(inputBy.value) };
+
+function updateInputsFromVectors() {
+    inputAx.value = vecA.x;
+    inputAy.value = -vecA.y;
+    inputBx.value = vecB.x;
+    inputBy.value = -vecB.y;
+}
+
+function updateVectorsFromInputs() {
+    vecA.x = parseFloat(inputAx.value) || 0;
+    vecA.y = -parseFloat(inputAy.value) || 0;
+    vecB.x = parseFloat(inputBx.value) || 0;
+    vecB.y = -parseFloat(inputBy.value) || 0;
+    render();
+}
+
+function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw Axis System
+    ctx.strokeStyle = '#313244';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, center.y); ctx.lineTo(canvas.width, center.y);
+    ctx.moveTo(center.x, 0); ctx.lineTo(center.x, canvas.height);
+    ctx.stroke();
+
+    // Render Geometric Vectors
+    drawArrow(center.x, center.y, center.x + vecA.x, center.y + vecA.y, '#a6e3a1', 'A');
+    drawArrow(center.x, center.y, center.x + vecB.x, center.y + vecB.y, '#89b4fa', 'B');
+
+    // Mathematical Cartesian Space Conversion
+    const ax = vecA.x, ay = -vecA.y;
+    const bx = vecB.x, by = -vecB.y;
+
+    const dotProduct = (ax * bx) + (ay * by);
+    const magA = Math.sqrt(ax * ax + ay * ay);
+    const magB = Math.sqrt(bx * bx + by * by);
+    const cosSim = (magA === 0 || magB === 0) ? 0 : dotProduct / (magA * magB);
+
+    // Dynamic Arc Rendering
+    const angleA = Math.atan2(vecA.y, vecA.x);
+    const angleB = Math.atan2(vecB.y, vecB.x);
+    ctx.strokeStyle = '#f9e2af';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, 25, angleA, angleB, angleA > angleB);
+    ctx.stroke();
+
+    // Inject Equations Trace Text
+    stepByStepText.innerHTML = `
+<b>1. Dot Product (A · B):</b>
+(${ax} × ${bx}) + (${ay} × ${by})
+= ${ax * bx} + ${ay * by}
+= <span class="highlight-sim">${dotProduct.toFixed(2)}</span>
+
+<b>2. Magnitude Vector A (||A||):</b>
+√(${ax}² + ${ay}²) = √(${ax*ax} + ${ay*ay})
+= <span class="highlight-a">${magA.toFixed(2)}</span>
+
+<b>3. Magnitude Vector B (||B||):</b>
+√(${bx}² + ${by}²) = √(${bx*bx} + ${by*by})
+= <span class="highlight-b">${magB.toFixed(2)}</span>
+
+<b>4. Cosine Similarity:</b>
+${dotProduct.toFixed(2)} / (${magA.toFixed(2)} × ${magB.toFixed(2)})
+${dotProduct.toFixed(2)} / ${(magA * magB).toFixed(2)}
+= <span class="highlight-sim" style="font-size:1.1rem">${cosSim.toFixed(4)}</span>
+    `.trim().replace(/\n/g, '<br>');
+}
+
+function drawArrow(fx, fy, tx, ty, color, label) {
+    const headlen = 10;
+    const angle = Math.atan2(ty - fy, tx - fx);
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 3;
+    
+    ctx.beginPath();
+    ctx.moveTo(fx, fy);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(tx - headlen * Math.cos(angle - Math.PI / 6), ty - headlen * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(tx - headlen * Math.cos(angle + Math.PI / 6), ty - headlen * Math.sin(angle + Math.PI / 6));
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText(label, tx + 12 * Math.cos(angle) - 4, ty + 12 * Math.sin(angle) + 4);
+}
+
+function handleMouseEvent(e) {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left - center.x;
+    const my = e.clientY - rect.top - center.y;
+
+    if (e.type === 'mousedown') {
+        isDragging = true;
+        const distA = Math.hypot(mx - vecA.x, my - vecA.y);
+        const distB = Math.hypot(mx - vecB.x, my - vecB.y);
+        canvas.targetVec = (distA < distB) ? 'A' : 'B';
+    }
+
+    if (isDragging) {
+        if (canvas.targetVec === 'A') {
+            vecA.x = mx; vecA.y = my;
+        } else {
+            vecB.x = mx; vecB.y = my;
+        }
+        updateInputsFromVectors();
+        render();
+    }
+}
+
+canvas.addEventListener('mousedown', handleMouseEvent);
+window.addEventListener('mousemove', handleMouseEvent);
+window.addEventListener('mouseup', () => isDragging = false);
+
+[inputAx, inputAy, inputBx, inputBy].forEach(input => {
+    input.addEventListener('input', updateVectorsFromInputs);
+});
+
+render();
+</script>
+</body>
+</html>
