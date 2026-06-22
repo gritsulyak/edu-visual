@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>bpe-visualizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root, [data-theme="light"] {
+      --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+      --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+      --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+      --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
+      --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
+      --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem; --space-5: 1.25rem; --space-6: 1.5rem; --space-8: 2rem; --space-10: 2.5rem; --space-12: 3rem;
+      --radius-sm: 0.375rem; --radius-md: 0.5rem; --radius-lg: 0.75rem; --radius-xl: 1rem;
+      --bg: #f5f7fa; --surface: #ffffff; --surface2: #eef2f6; --surface3: #e7edf4; --border: rgba(17,24,39,.12);
+      --text: #101828; --muted: #667085; --primary: #0f766e; --primary2:#0b5e58; --accent:#2563eb;
+      --shadow: 0 10px 30px rgba(16,24,40,.08);
+      --pair-a: rgba(37,99,235,.18); --pair-b: rgba(16,185,129,.18); --pair-c: rgba(245,158,11,.22); --pair-d: rgba(236,72,153,.20);
+    }
+    [data-theme="dark"] {
+      --bg: #0b1020; --surface: #121a2b; --surface2: #172133; --surface3: #1c2940; --border: rgba(255,255,255,.10);
+      --text: #e6edf7; --muted: #99a4b7; --primary: #53b7ab; --primary2:#72c8bf; --accent:#7aa2ff;
+      --shadow: 0 14px 40px rgba(0,0,0,.35);
+      --pair-a: rgba(122,162,255,.22); --pair-b: rgba(83,183,171,.22); --pair-c: rgba(245,158,11,.26); --pair-d: rgba(236,72,153,.24);
+    }
+    *,*::before,*::after{box-sizing:border-box}
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:Inter,sans-serif}
+    body{min-height:100vh;font-size:var(--text-base);line-height:1.55}
+    button,input,textarea,select{font:inherit;color:inherit}
+    .app{max-width:1400px;margin:0 auto;padding:var(--space-6)}
+    .topbar{display:flex;gap:var(--space-4);align-items:center;justify-content:space-between;margin-bottom:var(--space-6);flex-wrap:wrap}
+    .brand{display:flex;gap:var(--space-4);align-items:center}
+    .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--primary),var(--accent));display:grid;place-items:center;box-shadow:var(--shadow)}
+    .logo svg{width:24px;height:24px}
+    h1{font-size:var(--text-xl);line-height:1.05;margin:0;font-weight:800;letter-spacing:-.03em}
+    .subtitle{color:var(--muted);font-size:var(--text-sm);max-width:70ch}
+    .icon-btn{border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:10px 12px;min-height:44px;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+    .grid{display:grid;grid-template-columns:1.15fr .85fr;gap:var(--space-6)}
+    .panel{background:linear-gradient(180deg,var(--surface),var(--surface2));border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow)}
+    .panel-head{padding:var(--space-5) var(--space-5) 0 var(--space-5)}
+    .panel-body{padding:var(--space-5)}
+    .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-4);margin-bottom:var(--space-4)}
+    .field{display:flex;flex-direction:column;gap:8px}
+    .label{font-size:var(--text-xs);color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700}
+    .select,.input,.textarea{width:100%;background:var(--surface3);border:1px solid var(--border);border-radius:14px;padding:12px 14px;outline:none}
+    .textarea{min-height:180px;resize:vertical;font-family:"IBM Plex Mono",monospace;font-size:14px;line-height:1.55}
+    .metrics{display:flex;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-4)}
+    .metric{padding:10px 12px;border-radius:12px;background:var(--surface3);border:1px solid var(--border);font-size:var(--text-sm)}
+    .token-stream{display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start;min-height:140px;padding:14px;border-radius:16px;background:rgba(255,255,255,.02);border:1px dashed var(--border)}
+    .token{font-family:"IBM Plex Mono",monospace;font-size:14px;padding:6px 8px;border-radius:10px;border:1px solid transparent;cursor:pointer;white-space:pre-wrap;transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
+    .token:hover{transform:translateY(-1px);border-color:rgba(255,255,255,.18)}
+    .token.active{outline:none;border-color:var(--primary2);box-shadow:0 0 0 2px rgba(83,183,171,.18)}
+    .c0{background:var(--pair-a)} .c1{background:var(--pair-b)} .c2{background:var(--pair-c)} .c3{background:var(--pair-d)}
+    .explain{display:grid;gap:var(--space-4)}
+    .card{background:var(--surface3);border:1px solid var(--border);border-radius:16px;padding:var(--space-4)}
+    .mono{font-family:"IBM Plex Mono",monospace}
+    .small{font-size:var(--text-sm);color:var(--muted)}
+    .tiny{font-size:var(--text-xs);color:var(--muted)}
+    .bytes{display:flex;flex-wrap:wrap;gap:8px}
+    .byte{border:1px solid var(--border);background:var(--surface2);border-radius:10px;padding:8px 10px;min-width:62px;text-align:center;font-family:"IBM Plex Mono",monospace;font-size:12px}
+    .step-list{display:grid;gap:10px}
+    .step{padding:10px 12px;border-radius:12px;background:var(--surface2);border:1px solid var(--border)}
+    .pairline{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .pair-chip{padding:5px 8px;border-radius:999px;font-family:"IBM Plex Mono",monospace;font-size:12px;border:1px solid var(--border);background:var(--surface)}
+    .arrow{color:var(--primary2);font-weight:800}
+    .dict-table{width:100%;border-collapse:collapse;font-size:13px;font-family:"IBM Plex Mono",monospace}
+    .dict-table th,.dict-table td{padding:10px 8px;border-bottom:1px solid var(--border);vertical-align:top;text-align:left}
+    .dict-wrap{max-height:360px;overflow:auto;border-radius:14px;border:1px solid var(--border)}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+    .tab{padding:9px 12px;border-radius:999px;border:1px solid var(--border);background:var(--surface3);cursor:pointer;font-size:var(--text-sm)}
+    .tab.active{background:color-mix(in srgb, var(--primary) 20%, var(--surface3));border-color:color-mix(in srgb, var(--primary) 50%, var(--border))}
+    .status{padding:12px 14px;border-radius:14px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.28);font-size:var(--text-sm)}
+    .legend{display:flex;gap:10px;flex-wrap:wrap}
+    .legend span{display:inline-flex;align-items:center;gap:8px;font-size:var(--text-xs);color:var(--muted)}
+    .legend i{width:16px;height:16px;border-radius:4px;display:inline-block}
+    .footer-note{margin-top:var(--space-4);font-size:var(--text-xs);color:var(--muted)}
+    @media (max-width: 1080px){.grid{grid-template-columns:1fr}.controls{grid-template-columns:1fr 1fr}}
+    @media (max-width: 720px){.controls{grid-template-columns:1fr}.app{padding:var(--space-4)}h1{font-size:1.8rem}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 7h9a4 4 0 0 1 0 8H9"/>
+            <path d="M5 17h10a4 4 0 0 0 0-8h-1"/>
+          </svg>
+        </div>
+        <div>
+          <h1>BPE visualizer</h1>
+          <div class="subtitle">Single-file HTML app with dictionary selection, colored byte-pair display, and a click-to-explain pane that shows how a token or text fragment was produced.</div>
+        </div>
+      </div>
+      <button class="icon-btn" id="themeToggle" aria-label="Toggle theme">Theme</button>
+    </div>
+
+    <div class="grid">
+      <section class="panel">
+        <div class="panel-head">
+          <div class="controls">
+            <label class="field">
+              <span class="label">Mode</span>
+              <select class="select" id="modeSelect">
+                <option value="demo" selected>Built-in BPE demo</option>
+                <option value="gpt">GPT encoding (online)</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="label">Dictionary</span>
+              <select class="select" id="dictSelect"></select>
+            </label>
+            <label class="field">
+              <span class="label">Color view</span>
+              <select class="select" id="colorMode">
+                <option value="token" selected>By token order</option>
+                <option value="merge">By merge depth</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="label">GPT encoding</span>
+              <select class="select" id="gptEncoding">
+                <option value="o200k_base" selected>o200k_base</option>
+                <option value="cl100k_base">cl100k_base</option>
+                <option value="p50k_base">p50k_base</option>
+                <option value="r50k_base">r50k_base</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="panel-body">
+          <label class="field" style="margin-bottom:16px;">
+            <span class="label">Input text</span>
+            <textarea class="textarea" id="inputText">lower newer wider low low lower</textarea>
+          </label>
+
+          <div class="metrics">
+            <div class="metric">Characters: <span id="charCount" class="mono">0</span></div>
+            <div class="metric">Units: <span id="tokenCount" class="mono">0</span></div>
+            <div class="metric">Dictionary size: <span id="dictSize" class="mono">0</span></div>
+            <div class="metric">Byte items: <span id="byteCount" class="mono">0</span></div>
+          </div>
+
+          <div class="legend" style="margin-bottom:12px;">
+            <span><i style="background:var(--pair-a)"></i>group 1</span>
+            <span><i style="background:var(--pair-b)"></i>group 2</span>
+            <span><i style="background:var(--pair-c)"></i>group 3</span>
+            <span><i style="background:var(--pair-d)"></i>group 4</span>
+          </div>
+
+          <div class="token-stream" id="tokenStream" aria-live="polite"></div>
+          <div class="footer-note">In demo mode, the app shows explicit byte-pair merge steps. In GPT mode, it shows real encoding units and bytes; merge provenance is not exposed by the tokenizer library, so the explanation focuses on bytes and vocabulary mapping.</div>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <div class="panel-head">
+          <div class="tabs">
+            <button class="tab active" data-tab="explain">Explain</button>
+            <button class="tab" data-tab="pairs">Byte pairs</button>
+            <button class="tab" data-tab="dictionary">Dictionary</button>
+          </div>
+        </div>
+        <div class="panel-body explain">
+          <div id="tab-explain">
+            <div class="card" id="explainCard">
+              <div class="small">Click a token or a byte-pair step to inspect how it was produced.</div>
+            </div>
+          </div>
+          <div id="tab-pairs" hidden>
+            <div class="card">
+              <div class="small" style="margin-bottom:10px;">Current byte-pair merge trace</div>
+              <div class="step-list" id="pairSteps"></div>
+            </div>
+          </div>
+          <div id="tab-dictionary" hidden>
+            <div class="dict-wrap">
+              <table class="dict-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Token</th>
+                    <th>Bytes</th>
+                    <th>Produced by</th>
+                  </tr>
+                </thead>
+                <tbody id="dictBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const builtinDictionaries = {
+      toy_english: {
+        label: 'Toy English merges',
+        baseTokens: ['l','o','w','e','r','n','i','d',' '],
+        merges: [
+          ['l','o'],
+          ['lo','w'],
+          ['e','r'],
+          ['n','e'],
+          ['ne','w'],
+          ['low','er'],
+          ['new','er'],
+          ['w','i'],
+          ['wi','d'],
+          ['wid','er']
+        ]
+      },
+      codeish: {
+        label: 'Code-ish symbols',
+        baseTokens: ['f','u','n','c','(',')','{','}',' ','r','e','t','a','l','i','\n'],
+        merges: [
+          ['f','u'], ['fu','n'], ['fun','c'],
+          ['r','e'], ['re','t'], ['ret','u'], ['retu','r'], ['retur','n'],
+          [' ','r'], ['\n',' '], ['a','l']
+        ]
+      },
+      utf8_bytes: {
+        label: 'UTF-8 byte demo',
+        baseTokens: null,
+        merges: []
+      }
+    };
+
+    const state = {
+      tab: 'explain',
+      mode: 'demo',
+      selectedTokenIndex: 0,
+      selectedStepIndex: 0,
+      gptEncoders: new Map(),
+      gptLibReady: false,
+      lastResult: null
+    };
+
+    const el = {
+      modeSelect: document.getElementById('modeSelect'),
+      dictSelect: document.getElementById('dictSelect'),
+      colorMode: document.getElementById('colorMode'),
+      gptEncoding: document.getElementById('gptEncoding'),
+      inputText: document.getElementById('inputText'),
+      tokenStream: document.getElementById('tokenStream'),
+      explainCard: document.getElementById('explainCard'),
+      pairSteps: document.getElementById('pairSteps'),
+      dictBody: document.getElementById('dictBody'),
+      charCount: document.getElementById('charCount'),
+      tokenCount: document.getElementById('tokenCount'),
+      dictSize: document.getElementById('dictSize'),
+      byteCount: document.getElementById('byteCount'),
+      themeToggle: document.getElementById('themeToggle')
+    };
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function bytesOf(str) {
+      return Array.from(new TextEncoder().encode(str));
+    }
+
+    function hex(byte) {
+      return '0x' + byte.toString(16).padStart(2, '0').toUpperCase();
+    }
+
+    function printable(str) {
+      return String(str).replace(/\n/g, '↵').replace(/\t/g, '⇥').replace(/ /g, '␠');
+    }
+
+    function colorClass(index, depth, mode) {
+      const n = mode === 'merge' ? depth : index;
+      return 'c' + (Math.abs(n) % 4);
+    }
+
+    function buildDictionary(spec, textForUtf8 = '') {
+      const dict = [];
+      const map = new Map();
+      let id = 0;
+
+      function addToken(token, producedBy) {
+        if (map.has(token)) return map.get(token);
+        const item = { id: id++, token, bytes: bytesOf(token), producedBy };
+        dict.push(item);
+        map.set(token, item);
+        return item;
+      }
+
+      if (spec.baseTokens) {
+        for (const token of spec.baseTokens) addToken(token, 'base symbol');
+      } else {
+        const uniq = Array.from(new Set(Array.from(textForUtf8)));
+        uniq.forEach(ch => addToken(ch, 'base character'));
+      }
+
+      for (const [a, b] of spec.merges) {
+        const merged = a + b;
+        addToken(merged, `merge(${printable(a)} + ${printable(b)})`);
+      }
+
+      return { dict, map };
+    }
+
+    function tokenizeDemo(text, dictionaryKey) {
+      const spec = builtinDictionaries[dictionaryKey];
+      const { dict, map } = buildDictionary(spec, text);
+      const words = text.split(/(\s+)/).filter(part => part.length > 0);
+      const resultTokens = [];
+      const aggregateSteps = [];
+      const aggregatePairs = [];
+
+      for (const chunk of words) {
+        if (/^\s+$/.test(chunk)) {
+          resultTokens.push({
+            id: map.has(' ') ? map.get(' ').id : -1,
+            text: chunk,
+            bytes: bytesOf(chunk),
+            mergeDepth: 0,
+            producedBy: 'raw whitespace',
+            steps: [{ type: 'base', sequence: Array.from(chunk), chosenPair: null, merged: null }]
+          });
+          continue;
+        }
+
+        let sequence = Array.from(chunk);
+        const steps = [{ type: 'bytes/chars', sequence: [...sequence], chosenPair: null, merged: null }];
+        let changed = true;
+        let depth = 0;
+
+        while (changed) {
+          changed = false;
+          let bestIndex = -1;
+          let bestToken = null;
+          for (let i = 0; i < sequence.length - 1; i++) {
+            const pairToken = sequence[i] + sequence[i + 1];
+            if (map.has(pairToken)) {
+              bestIndex = i;
+              bestToken = pairToken;
+              break;
+            }
+          }
+          if (bestIndex !== -1) {
+            const left = sequence[bestIndex];
+            const right = sequence[bestIndex + 1];
+            sequence.splice(bestIndex, 2, bestToken);
+            depth += 1;
+            changed = true;
+            const step = { type: 'merge', sequence: [...sequence], chosenPair: [left, right], merged: bestToken, depth };
+            steps.push(step);
+            aggregateSteps.push(step);
+            aggregatePairs.push({ left, right, merged: bestToken, depth, chunk });
+          }
+        }
+
+        for (const finalToken of sequence) {
+          const found = map.get(finalToken);
+          resultTokens.push({
+            id: found ? found.id : -1,
+            text: finalToken,
+            bytes: bytesOf(finalToken),
+            mergeDepth: Math.max(0, steps.length - 1),
+            producedBy: found ? found.producedBy : 'fallback raw',
+            steps
+          });
+        }
+      }
+
+      return { mode: 'demo', dictionaryKey, dict, tokens: resultTokens, steps: aggregateSteps, pairs: aggregatePairs, status: null };
+    }
+
+    async function ensureGptEncoder(name) {
+      if (state.gptEncoders.has(name)) return state.gptEncoders.get(name);
+      const mod = await import(`https://esm.sh/gpt-tokenizer/esm/encoding/${name}?bundle`);
+      state.gptEncoders.set(name, mod.default);
+      state.gptLibReady = true;
+      return mod.default;
+    }
+
+    async function tokenizeGpt(text, encodingName) {
+      try {
+        const encoder = await ensureGptEncoder(encodingName);
+        const ids = encoder.encode(text);
+        const tokens = ids.map((id, index) => {
+          const decoded = encoder.decode([id]);
+          return {
+            id,
+            text: decoded,
+            bytes: bytesOf(decoded),
+            mergeDepth: index % 4,
+            producedBy: `vocabulary entry in ${encodingName}`,
+            steps: [{ type: 'vocab', sequence: [decoded], chosenPair: null, merged: decoded, depth: 0 }]
+          };
+        });
+        const dict = [];
+        const seen = new Set();
+        for (const t of tokens) {
+          const key = `${t.id}::${t.text}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            dict.push({ id: t.id, token: t.text, bytes: t.bytes, producedBy: t.producedBy });
+          }
+        }
+        return { mode: 'gpt', dictionaryKey: encodingName, dict, tokens, steps: [], pairs: [], status: null };
+      } catch (error) {
+        return {
+          mode: 'gpt', dictionaryKey: encodingName, dict: [], tokens: [], steps: [], pairs: [],
+          status: `GPT encoding failed to load. Open the file with internet access or serve it through a local HTTP server. Technical message: ${error.message}`
+        };
+      }
+    }
+
+    function renderTokens(result) {
+      el.tokenStream.innerHTML = '';
+      if (result.status) {
+        const div = document.createElement('div');
+        div.className = 'status';
+        div.textContent = result.status;
+        el.tokenStream.appendChild(div);
+        return;
+      }
+      if (!result.tokens.length) {
+        el.tokenStream.innerHTML = '<div class="small">No tokens produced.</div>';
+        return;
+      }
+      result.tokens.forEach((token, index) => {
+        const btn = document.createElement('button');
+        btn.className = `token ${colorClass(index, token.mergeDepth, el.colorMode.value)} ${index === state.selectedTokenIndex ? 'active' : ''}`;
+        btn.textContent = token.text;
+        btn.title = `id=${token.id}`;
+        btn.addEventListener('click', () => {
+          state.selectedTokenIndex = index;
+          renderAll(result);
+        });
+        el.tokenStream.appendChild(btn);
+      });
+    }
+
+    function renderExplain(result) {
+      if (result.status) {
+        el.explainCard.innerHTML = `<div class="small">${escapeHtml(result.status)}</div>`;
+        return;
+      }
+      const token = result.tokens[state.selectedTokenIndex] || result.tokens[0];
+      if (!token) {
+        el.explainCard.innerHTML = '<div class="small">Nothing selected.</div>';
+        return;
+      }
+      const bytes = token.bytes.map(b => `<div class="byte"><div>${hex(b)}</div><div>${b}</div></div>`).join('');
+      let mergeHtml = '<div class="small">This token is a direct vocabulary item.</div>';
+      if (result.mode === 'demo' && token.steps && token.steps.length) {
+        mergeHtml = '<div class="step-list">' + token.steps.map((step, i) => {
+          if (step.type === 'merge') {
+            return `<div class="step"><div class="tiny">Step ${i}</div><div class="pairline"><span class="pair-chip">${escapeHtml(printable(step.chosenPair[0]))}</span><span class="arrow">+</span><span class="pair-chip">${escapeHtml(printable(step.chosenPair[1]))}</span><span class="arrow">→</span><span class="pair-chip">${escapeHtml(printable(step.merged))}</span></div><div class="tiny" style="margin-top:8px;">Sequence now: ${step.sequence.map(s => `<span class='pair-chip'>${escapeHtml(printable(s))}</span>`).join(' ')}</div></div>`;
+          }
+          return `<div class="step"><div class="tiny">Initial split</div><div class="pairline">${step.sequence.map(s => `<span class='pair-chip'>${escapeHtml(printable(s))}</span>`).join(' ')}</div></div>`;
+        }).join('') + '</div>';
+      }
+      el.explainCard.innerHTML = `
+        <div class="small">Selected token</div>
+        <div class="mono" style="font-size:18px;font-weight:600;word-break:break-word;">${escapeHtml(printable(token.text))}</div>
+        <div class="tiny">Token ID: <span class="mono">${token.id}</span></div>
+        <div class="tiny">Produced by: ${escapeHtml(token.producedBy)}</div>
+        <div class="tiny">UTF-8 bytes</div>
+        <div class="bytes">${bytes}</div>
+        <div class="tiny" style="margin-top:10px;">How it was produced</div>
+        ${mergeHtml}
+      `;
+    }
+
+    function renderPairs(result) {
+      el.pairSteps.innerHTML = '';
+      if (result.status) {
+        el.pairSteps.innerHTML = `<div class="small">${escapeHtml(result.status)}</div>`;
+        return;
+      }
+      if (result.mode !== 'demo') {
+        el.pairSteps.innerHTML = '<div class="small">Real GPT tokenizers expose token IDs and decoded text, but not the internal merge trace for each produced token in this browser view.</div>';
+        return;
+      }
+      if (!result.pairs.length) {
+        el.pairSteps.innerHTML = '<div class="small">No merge steps for current text.</div>';
+        return;
+      }
+      result.pairs.forEach((pair, idx) => {
+        const row = document.createElement('button');
+        row.className = 'step';
+        row.style.textAlign = 'left';
+        row.innerHTML = `<div class="tiny">merge depth ${pair.depth} in word <span class="mono">${escapeHtml(pair.chunk)}</span></div><div class="pairline"><span class="pair-chip">${escapeHtml(printable(pair.left))}</span><span class="arrow">+</span><span class="pair-chip">${escapeHtml(printable(pair.right))}</span><span class="arrow">→</span><span class="pair-chip">${escapeHtml(printable(pair.merged))}</span></div>`;
+        row.addEventListener('click', () => {
+          state.selectedStepIndex = idx;
+          el.explainCard.innerHTML = `
+            <div class="small">Selected byte pair</div>
+            <div class="pairline" style="margin-top:8px;"><span class="pair-chip">${escapeHtml(printable(pair.left))}</span><span class="arrow">+</span><span class="pair-chip">${escapeHtml(printable(pair.right))}</span><span class="arrow">→</span><span class="pair-chip">${escapeHtml(printable(pair.merged))}</span></div>
+            <div class="tiny" style="margin-top:10px;">This merge exists in the chosen demo dictionary, so the tokenizer replaces the adjacent pair with the merged token when scanning left to right.</div>
+            <div class="tiny" style="margin-top:10px;">Left bytes: ${bytesOf(pair.left).map(hex).join(' ')}</div>
+            <div class="tiny">Right bytes: ${bytesOf(pair.right).map(hex).join(' ')}</div>
+            <div class="tiny">Merged bytes: ${bytesOf(pair.merged).map(hex).join(' ')}</div>
+          `;
+          setActiveTab('explain');
+        });
+        el.pairSteps.appendChild(row);
+      });
+    }
+
+    function renderDictionary(result) {
+      el.dictBody.innerHTML = '';
+      if (!result.dict.length) {
+        el.dictBody.innerHTML = '<tr><td colspan="4" class="small">No dictionary rows.</td></tr>';
+        return;
+      }
+      result.dict.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${item.id}</td>
+          <td>${escapeHtml(printable(item.token))}</td>
+          <td>${escapeHtml(item.bytes.map(hex).join(' '))}</td>
+          <td>${escapeHtml(item.producedBy)}</td>
+        `;
+        el.dictBody.appendChild(tr);
+      });
+    }
+
+    function updateMetrics(result) {
+      const text = el.inputText.value;
+      el.charCount.textContent = text.length;
+      el.tokenCount.textContent = result.tokens.length;
+      el.dictSize.textContent = result.dict.length;
+      el.byteCount.textContent = bytesOf(text).length;
+    }
+
+    function renderAll(result) {
+      state.lastResult = result;
+      renderTokens(result);
+      renderExplain(result);
+      renderPairs(result);
+      renderDictionary(result);
+      updateMetrics(result);
+    }
+
+    function setActiveTab(name) {
+      state.tab = name;
+      document.querySelectorAll('.tab').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === name));
+      document.getElementById('tab-explain').hidden = name !== 'explain';
+      document.getElementById('tab-pairs').hidden = name !== 'pairs';
+      document.getElementById('tab-dictionary').hidden = name !== 'dictionary';
+    }
+
+    async function run() {
+      state.mode = el.modeSelect.value;
+      state.selectedTokenIndex = 0;
+      let result;
+      if (state.mode === 'demo') {
+        result = tokenizeDemo(el.inputText.value, el.dictSelect.value);
+      } else {
+        result = await tokenizeGpt(el.inputText.value, el.gptEncoding.value);
+      }
+      renderAll(result);
+    }
+
+    function populateDictionaries() {
+      el.dictSelect.innerHTML = Object.entries(builtinDictionaries)
+        .map(([key, value]) => `<option value="${key}">${value.label}</option>`)
+        .join('');
+    }
+
+    function initTheme() {
+      let mode = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', mode);
+      el.themeToggle.textContent = mode === 'dark' ? 'Light mode' : 'Dark mode';
+      el.themeToggle.addEventListener('click', () => {
+        mode = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', mode);
+        el.themeToggle.textContent = mode === 'dark' ? 'Light mode' : 'Dark mode';
+      });
+    }
+
+    function bind() {
+      el.modeSelect.addEventListener('change', () => {
+        const demo = el.modeSelect.value === 'demo';
+        el.dictSelect.disabled = !demo;
+        el.gptEncoding.disabled = demo;
+        run();
+      });
+      el.dictSelect.addEventListener('change', run);
+      el.gptEncoding.addEventListener('change', run);
+      el.colorMode.addEventListener('change', () => state.lastResult && renderAll(state.lastResult));
+      el.inputText.addEventListener('input', run);
+      document.querySelectorAll('.tab').forEach(btn => btn.addEventListener('click', () => setActiveTab(btn.dataset.tab)));
+    }
+
+    populateDictionaries();
+    initTheme();
+    bind();
+    el.gptEncoding.disabled = true;
+    run();
+  </script>
+</body>
+</html>
