@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Go-Basic-2026-02 — Квиз по Модулю 1–2</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 900px;
+      margin: 20px auto;
+      padding: 0 16px;
+      line-height: 1.5;
+      background: #f5f5f5;
+    }
+    h1 {
+      text-align: center;
+    }
+    #quiz-container {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    #top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 14px;
+      color: #555;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    #question-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    #timer {
+      font-weight: 600;
+      color: #d32f2f;
+    }
+    #question-text {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .option {
+      margin: 6px 0;
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      background: #fafafa;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .option:hover {
+      background: #f0f0f0;
+    }
+    .option input {
+      margin-right: 6px;
+    }
+    .correct {
+      background: #e6ffed !important;
+      border-color: #1f883d !important;
+    }
+    .incorrect {
+      background: #ffebee !important;
+      border-color: #d32f2f !important;
+    }
+    #feedback {
+      margin-top: 10px;
+      min-height: 20px;
+      font-size: 14px;
+    }
+    #feedback.correct-text {
+      color: #1f883d;
+    }
+    #feedback.incorrect-text {
+      color: #d32f2f;
+    }
+    #controls {
+      margin-top: 16px;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    #next-btn {
+      background: #1976d2;
+      color: #fff;
+    }
+    #next-btn:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+    #restart-btn {
+      background: #555;
+      color: #fff;
+    }
+    #show-answer-btn {
+      background: #9c27b0;
+      color: #fff;
+    }
+    #score {
+      margin-top: 12px;
+      font-weight: 600;
+    }
+    #final-result {
+      display: none;
+      margin-top: 20px;
+      padding: 16px;
+      border-radius: 8px;
+      background: #e3f2fd;
+      border: 1px solid #90caf9;
+    }
+    #progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    #progress-fill {
+      height: 100%;
+      width: 0%;
+      background: #1976d2;
+      transition: width 0.2s;
+    }
+    code {
+      background: #eee;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-size: 90%;
+    }
+  </style>
+</head>
+<body>
+  <h1>Квиз по Go-Basic (Модули 1–2)</h1>
+  <div id="quiz-container">
+    <div id="progress-bar">
+      <div id="progress-fill"></div>
+    </div>
+
+    <div id="top-row">
+      <div id="question-meta">
+        <div id="question-counter"></div>
+        <div id="category"></div>
+      </div>
+      <div id="timer">Время: 60 c</div>
+    </div>
+
+    <div id="question-text"></div>
+    <div id="options"></div>
+    <div id="feedback"></div>
+    <div id="score"></div>
+
+    <div id="controls">
+      <button id="show-answer-btn">Показать правильный</button>
+      <button id="next-btn" disabled>Следующий вопрос</button>
+      <button id="restart-btn">Начать заново</button>
+    </div>
+
+    <div id="final-result"></div>
+  </div>
+
+  <script>
+    // 50 вопросов по программе модулей 1–2 (без конкуренции и горутин)
+    const questions = [
+      {
+        category: "Окружение / установка",
+        question: "Какой командой обычно проверяют установленную версию Go в терминале после установки SDK?",
+        options: ["go run version", "go env", "go version", "go sdk -v"],
+        answer: 2
+      },
+      {
+        category: "Окружение / установка",
+        question: "Где по умолчанию находятся загруженные модули Go (начиная с Go Modules)?",
+        options: ["В директории проекта ./vendor", "В директории, указанной в переменной GOPATH", "В кэше модулей в каталоге GOPATH/pkg/mod или аналогичном для Go modules", "В системной директории /usr/local/go/pkg/mod"],
+        answer: 2
+      },
+      {
+        category: "Go toolchain",
+        question: "Какой командой создают новый модуль Go в корне проекта согласно current best practices?",
+        options: ["go init", "go module create", "go mod init <module_path>", "go new module"],
+        answer: 2
+      },
+      {
+        category: "Go toolchain",
+        question: "Какой файл обязателен для проекта, использующего Go Modules?",
+        options: ["GOMOD", "go.mod", "go.env", "mod.go"],
+        answer: 1
+      },
+      {
+        category: "Git / GitHub",
+        question: "Какая команда инициализирует новый git-репозиторий в текущей директории?",
+        options: ["git start", "git init", "git new", "git create"],
+        answer: 1
+      },
+      {
+        category: "Git / GitHub",
+        question: "Как правильно создать новую ветку hw-02 от ветки main локально (две команды)?",
+        options: ["git branch hw-02; git checkout hw-02", "git init hw-02; git switch hw-02", "git push origin hw-02; git checkout hw-02", "git new hw-02; git use hw-02"],
+        answer: 0
+      },
+      {
+        category: "Git / GitHub",
+        question: "Какая команда отправляет локальные коммиты на удалённый репозиторий в ветку hw-02?",
+        options: ["git pull origin hw-02", "git fetch origin hw-02", "git push origin hw-02", "git upload origin hw-02"],
+        answer: 2
+      },
+      {
+        category: "Git / GitHub",
+        question: "Какая команда обновляет локальную ветку main последними изменениями с origin/main?",
+        options: ["git push", "git pull", "git add", "git commit"],
+        answer: 1
+      },
+      {
+        category: "Git / PR-флоу",
+        question: "Зачем нужен pull request в контексте домашних заданий?",
+        options: [
+          "Чтобы создать локальную ветку",
+          "Чтобы запросить ревью изменений и обсуждение кода перед merge",
+          "Чтобы автоматически запускать приложение",
+          "Чтобы удалить ветку после выполнения задания"
+        ],
+        answer: 1
+      },
+      {
+        category: "Git / PR-флоу",
+        question: "Что логичнее сделать после того, как ментор оставил комментарии к PR?",
+        options: [
+          "Удалить PR и создать новый",
+          "Сделать дополнительные коммиты в ту же ветку с исправлениями",
+          "Переключиться на main и форс-пушнуть туда изменения",
+          "Ничего не делать, достаточно комментариев"
+        ],
+        answer: 1
+      },
+
+      // Go basics: типы, переменные, указатели
+      {
+        category: "Типы и переменные",
+        question: "Какое нулевое значение у переменной типа int в Go?",
+        options: ["1", "0", "-1", "nil"],
+        answer: 1
+      },
+      {
+        category: "Типы и переменные",
+        question: "Как в Go объявить переменную x типа string с начальным значением \"hello\" в короткой форме?",
+        options: ["var x string = hello", "string x := \"hello\"", "x := \"hello\"", "let x = \"hello\""],
+        answer: 2
+      },
+      {
+        category: "Типы и переменные",
+        question: "Какой из перечисленных типов в Go является беззнаковым целым?",
+        options: ["int", "int8", "byte", "float32"],
+        answer: 2
+      },
+      {
+        category: "Указатели",
+        question: "Что хранит в себе указатель в Go?",
+        options: [
+          "Копию значения переменной",
+          "Адрес в памяти, по которому лежит значение",
+          "Тип переменной",
+          "Размер значения в байтах"
+        ],
+        answer: 1
+      },
+      {
+        category: "Указатели",
+        question: "Как получить указатель на переменную x в Go?",
+        options: ["&x", "*x", "ptr(x)", "ref(x)"],
+        answer: 0
+      },
+
+      // Строки и руны
+      {
+        category: "Строки и руны",
+        question: "Какой тип в Go чаще всего используют для представления одного Unicode-символа?",
+        options: ["byte", "rune", "string", "char"],
+        answer: 1
+      },
+      {
+        category: "Строки и руны",
+        question: "Какой тип данных у литерала \"Привет\" в Go?",
+        options: ["[]byte", "[]rune", "string", "char"],
+        answer: 2
+      },
+      {
+        category: "Строки и руны",
+        question: "Что возвращает встроенная функция len(\"Привет\") в Go?",
+        options: [
+          "Количество Unicode-символов (рун)",
+          "Количество байт в UTF-8 представлении строки",
+          "Количество слов",
+          "Зависит от кодировки, установленной в ОС"
+        ],
+        answer: 1
+      },
+      {
+        category: "Строки и руны",
+        question: "Как корректно итерироваться по Unicode-символам (рунам) строки в Go?",
+        options: [
+          "Через индексирование s[i]",
+          "Через цикл for range по строке",
+          "Через преобразование к []byte и обход по байтам",
+          "Это невозможно в Go"
+        ],
+        answer: 1
+      },
+      {
+        category: "Пакет strings",
+        question: "Какой пакет стандартной библиотеки Go содержит полезные функции для работы со строками (поиск, разбиение, приведение регистра)?",
+        options: ["text", "fmt", "strings", "bytes"],
+        answer: 2
+      },
+
+      // Управляющие конструкции
+      {
+        category: "Управляющие конструкции",
+        question: "Какой синтаксис условного оператора if в Go является корректным?",
+        options: [
+          "if (x > 0) { ... }",
+          "if x > 0 then { ... }",
+          "if x > 0 { ... }",
+          "if x > 0: ...",
+        ],
+        answer: 2
+      },
+      {
+        category: "Управляющие конструкции",
+        question: "Чем в Go отличается цикл for от C-подобных языков?",
+        options: [
+          "В Go нет цикла for",
+          "В Go for объединяет while и обычный for, других циклов нет",
+          "В Go обязательно использовать ключевое слово do",
+          "for в Go может использоваться только с range"
+        ],
+        answer: 1
+      },
+      {
+        category: "Управляющие конструкции",
+        question: "Какой вариант объявления бесконечного цикла в Go корректен?",
+        options: [
+          "for (;;) { ... }",
+          "while(true) { ... }",
+          "loop { ... }",
+          "for { ... }"
+        ],
+        answer: 3
+      },
+      {
+        category: "Управляющие конструкции",
+        question: "Что делает оператор break в цикле for?",
+        options: [
+          "Пропускает текущую итерацию",
+          "Завершает текущий цикл",
+          "Завершает программу",
+          "Переходит к следующему циклу"
+        ],
+        answer: 1
+      },
+      {
+        category: "Управляющие конструкции",
+        question: "Какой оператор используется для пропуска текущей итерации цикла for и перехода к следующей?",
+        options: ["skip", "continue", "next", "pass"],
+        answer: 1
+      },
+
+      // Функции и пакеты
+      {
+        category: "Функции",
+        question: "Как объявить функцию main в Go?",
+        options: [
+          "func main() {}",
+          "function main() {}",
+          "void main() {}",
+          "func main(void) {}"
+        ],
+        answer: 0
+      },
+      {
+        category: "Функции",
+        question: "Как в Go объявить функцию sum, принимающую два int и возвращающую int?",
+        options: [
+          "func sum(a int, b int) int { ... }",
+          "int sum(int a, int b) { ... }",
+          "func sum(int a, int b) { ... }",
+          "sum(a int, b int) -> int { ... }"
+        ],
+        answer: 0
+      },
+      {
+        category: "Функции",
+        question: "Сколько функций main может быть в одном пакете?",
+        options: ["Не более одной", "Столько, сколько нужно", "Ровно две", "Не может быть ни одной"],
+        answer: 0
+      },
+      {
+        category: "Пакеты",
+        question: "Какой пакет должен быть у исполняемого приложения в Go, чтобы его можно было запустить через go run или собрать в бинарь?",
+        options: ["package app", "package executable", "package main", "package run"],
+        answer: 2
+      },
+      {
+        category: "Пакеты",
+        question: "Как в файле main.go импортировать пакет chessboard из каталога internal/chessboard вашего модуля?",
+        options: [
+          "import \"internal/chessboard\"",
+          "import \"chessboard\"",
+          "import \"<module_path>/internal/chessboard\"",
+          "import \"./internal/chessboard\""
+        ],
+        answer: 2
+      },
+
+      // Структуры, методы, модели
+      {
+        category: "Структуры",
+        question: "Как объявить структуру Player с полями Name string и Color string?",
+        options: [
+          "struct Player { string Name; string Color }",
+          "type Player struct { Name string; Color string }",
+          "class Player { Name string; Color string }",
+          "type Player { Name string; Color string }"
+        ],
+        answer: 1
+      },
+      {
+        category: "Структуры",
+        question: "Каким образом в Go сделать поле структуры недоступным вне пакета?",
+        options: [
+          "Объявить поле с маленькой буквы в имени",
+          "Добавить модификатор private",
+          "Использовать ключевое слово internal",
+          "Использовать аннотацию // private"
+        ],
+        answer: 0
+      },
+      {
+        category: "Методы",
+        question: "Как правильно объявить метод Name() для структуры Player, возвращающий строку, используя value receiver?",
+        options: [
+          "func (p Player) Name() string { ... }",
+          "func Player.Name() string { ... }",
+          "method (p Player) Name() string { ... }",
+          "func Name(p Player) string { ... }"
+        ],
+        answer: 0
+      },
+      {
+        category: "Интерфейсы",
+        question: "Что из перечисленного является определением интерфейса в Go?",
+        options: [
+          "type Figure interface { Move() }",
+          "interface Figure { Move() }",
+          "trait Figure { fn Move() }",
+          "class Figure { interface Move() }"
+        ],
+        answer: 0
+      },
+      {
+        category: "Интерфейсы",
+        question: "Когда тип в Go считается реализующим интерфейс?",
+        options: [
+          "Когда явно указано implements в объявлении типа",
+          "Когда тип встраивает другой тип, реализующий интерфейс",
+          "Когда тип реализует все методы интерфейса (структурная типизация)",
+          "Когда компилятору передана специальная опция"
+        ],
+        answer: 2
+      },
+
+      // Массивы, слайсы, мапы
+      {
+        category: "Слайсы и массивы",
+        question: "Чем слайс в Go отличается от массива того же типа?",
+        options: [
+          "Массив имеет фиксированную длину, слайс — динамический вид на массив",
+          "Слайс хранит только длину, но не ссылку на данные",
+          "Массив всегда nil, а слайс — нет",
+          "Отличий нет"
+        ],
+        answer: 0
+      },
+      {
+        category: "Слайсы и массивы",
+        question: "Как создать слайс из 8 элементов типа string, инициализированных пустыми строками?",
+        options: [
+          "s := []string(8)",
+          "s := make([]string, 8)",
+          "s := new([]string{8})",
+          "var s [8]string"
+        ],
+        answer: 1
+      },
+      {
+        category: "Слайсы и массивы",
+        question: "Что произойдёт при добавлении элемента в слайс с помощью append, если у слайса закончилась capacity?",
+        options: [
+          "Go вызовет panic",
+          "append вернёт nil",
+          "append создаст новый массив большего размера и вернёт новый слайс",
+          "Элемент будет проигнорирован"
+        ],
+        answer: 2
+      },
+      {
+        category: "Мапы",
+        question: "Каким образом объявить и инициализировать пустую map[string]int?",
+        options: [
+          "var m map[string]int = {}",
+          "m := map[string]int{}",
+          "m := []map[string]int{}",
+          "m := make([]string, 0)"
+        ],
+        answer: 1
+      },
+      {
+        category: "Мапы",
+        question: "Как проверить, существует ли ключ k в map[string]int m?",
+        options: [
+          "if m[k] != nil { ... }",
+          "if exists(m, k) { ... }",
+          "v, ok := m[k]; if ok { ... }",
+          "if has(m, k) { ... }"
+        ],
+        answer: 2
+      },
+
+      // Chess board domain / project structure
+      {
+        category: "Шахматная доска",
+        question: "Как удобнее всего представить состояние шахматной доски для вывода в консоль в ДЗ-3?",
+        options: [
+          "Одной строкой без разделителей",
+          "Массивом байт фиксированного размера",
+          "Двумерной структурой (например, слайсом слайсов рун или строк)",
+          "Отдельной мапой для каждой клетки"
+        ],
+        answer: 2
+      },
+      {
+        category: "Шахматная доска",
+        question: "Какая конструкция лучше всего подходит для генерации строк вида \"чёрное/белое поле\" по координатам i, j?",
+        options: [
+          "Использовать switch по всем 64 клеткам",
+          "Использовать if ((i+j)%2 == 0) ... else ...",
+          "Хранить цвет каждой клетки в массиве длиной 64",
+          "Использовать рекурсию по клеткам"
+        ],
+        answer: 1
+      },
+      {
+        category: "Шахматная доска",
+        question: "Как проще всего сделать размер доски параметризуемым (NxN) в ДЗ-3?",
+        options: [
+          "Вынести значение N в константу и пересобирать программу",
+          "Читать N из аргументов командной строки или stdin перед генерацией доски",
+          "Захардкодить несколько вариантов и выбирать через if",
+          "Это невозможно, размер всегда 8x8"
+        ],
+        answer: 1
+      },
+      {
+        category: "Игроки и фигуры",
+        question: "Где логичнее хранить Unicode-символы фигур (король, ферзь, ладья и т.п.) для дальнейшего использования?",
+        options: [
+          "В main() в виде локальных переменных",
+          "В global-переменных без структур",
+          "В отдельном пакете/структуре, отвечающей за представление фигур",
+          "Хардкодить каждый раз при выводе клетки"
+        ],
+        answer: 2
+      },
+      {
+        category: "Игроки и фигуры",
+        question: "Как лучше всего сохранить имена двух игроков так, чтобы их можно было вывести рядом с доской и использовать в структуре Game?",
+        options: [
+          "Двумя отдельными глобальными переменными",
+          "Слайсом string длины 2 или двумя полями в структуре Players",
+          "Хранить только одного активного игрока",
+          "Хранить имена только в main() и передавать через глобальное состояние"
+        ],
+        answer: 1
+      },
+
+      // internal/model, internal/service, internal/repository
+      {
+        category: "Структура проекта",
+        question: "Зачем в домашних заданиях предлагалось разместить доменные структуры (игроки, игры, ходы, поле) в пакете internal/model?",
+        options: [
+          "Чтобы ограничить доступ к ним из других модулей вне вашего приложения",
+          "Чтобы ускорить компиляцию",
+          "Чтобы иметь возможность использовать их только в тестах",
+          "Это требование Go компилятора"
+        ],
+        answer: 0
+      },
+      {
+        category: "Структура проекта",
+        question: "Какова основная роль пакета internal/service в описанном подходе?",
+        options: [
+          "Хранить только структуры данных без логики",
+          "Реализовывать бизнес-логику поверх моделей",
+          "Выполнять операции ввода-вывода с консолью",
+          "Содержать только main-функцию"
+        ],
+        answer: 1
+      },
+      {
+        category: "Структура проекта",
+        question: "Какова основная роль пакета internal/repository в контексте домашнего задания с слайсами?",
+        options: [
+          "Отрисовка доски в консоли",
+          "Работа с внешней БД",
+          "Приём структур от сервисного слоя и сохранение их в соответствующие слайсы",
+          "Организация многопоточности и планировщика"
+        ],
+        answer: 2
+      },
+      {
+        category: "Интерфейсы / репозиторий",
+        question: "Зачем требовалось, чтобы разные структуры (например, ход, игра, игрок) реализовывали общий интерфейс для передачи в репозиторий?",
+        options: [
+          "Чтобы уменьшить количество файлов в проекте",
+          "Чтобы можно было хранить любые структуры в одном слайсе без проверки типа",
+          "Чтобы репозиторий мог принимать значения одного интерфейсного типа и распределять их по конкретным слайсам через type assertion",
+          "Чтобы ускорить выполнение программы"
+        ],
+        answer: 2
+      },
+      {
+        category: "Интерфейсы / type assertion",
+        question: "Как в Go проверить реальный тип значения интерфейса value и выполнить логику в зависимости от типа?",
+        options: [
+          "Использовать оператор as в стиле других языков",
+          "Использовать конструкцию switch v := value.(type) { ... }",
+          "Использовать reflect.TypeOf внутри if-else",
+          "Это невозможно"
+        ],
+        answer: 1
+      }
+    ];
+
+    let currentIndex = 0;
+    let score = 0;
+    let answered = false;
+
+    let timeLeft = 60;         // секунд на вопрос
+    let timerId = null;
+
+    const questionTextEl = document.getElementById("question-text");
+    const optionsEl = document.getElementById("options");
+    const feedbackEl = document.getElementById("feedback");
+    const scoreEl = document.getElementById("score");
+    const counterEl = document.getElementById("question-counter");
+    const categoryEl = document.getElementById("category");
+    const nextBtn = document.getElementById("next-btn");
+    const restartBtn = document.getElementById("restart-btn");
+    const showAnswerBtn = document.getElementById("show-answer-btn");
+    const finalResultEl = document.getElementById("final-result");
+    const progressFillEl = document.getElementById("progress-fill");
+    const timerEl = document.getElementById("timer");
+
+    function shuffleArray(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    }
+
+    function stopTimer() {
+      if (timerId !== null) {
+        clearInterval(timerId);
+        timerId = null;
+      }
+    }
+
+    function startTimerForQuestion() {
+      stopTimer();
+      timeLeft = 60;
+      timerEl.textContent = "Время: " + timeLeft + " c";
+      timerId = setInterval(() => {
+        timeLeft--;
+        timerEl.textContent = "Время: " + timeLeft + " c";
+        if (timeLeft <= 0) {
+          stopTimer();
+          if (!answered) {
+            feedbackEl.textContent = "Время вышло. Переходим к следующему вопросу.";
+            feedbackEl.className = "incorrect-text";
+            answered = true;
+            nextBtn.disabled = false;
+          }
+        }
+      }, 1000);
+    }
+
+    function startQuiz() {
+      score = 0;
+      currentIndex = 0;
+      answered = false;
+      shuffleArray(questions);
+      for (const q of questions) {
+        const paired = q.options.map((opt, idx) => ({ opt, idx }));
+        shuffleArray(paired);
+        q.shuffledOptions = paired.map(p => p.opt);
+        q.correctIndexShuffled = paired.findIndex(p => p.idx === q.answer);
+      }
+      finalResultEl.style.display = "none";
+      scoreEl.textContent = "Счёт: 0 / " + questions.length;
+      loadQuestion();
+    }
+
+    function updateProgress() {
+      const progress = (currentIndex / questions.length) * 100;
+      progressFillEl.style.width = progress + "%";
+    }
+
+    function loadQuestion() {
+      if (currentIndex >= questions.length) {
+        stopTimer();
+        showFinalResult();
+        return;
+      }
+      updateProgress();
+      answered = false;
+      nextBtn.disabled = true;
+      feedbackEl.textContent = "";
+      feedbackEl.className = "";
+      optionsEl.innerHTML = "";
+      const q = questions[currentIndex];
+      counterEl.textContent = "Вопрос " + (currentIndex + 1) + " из " + questions.length;
+      categoryEl.textContent = q.category;
+      questionTextEl.textContent = q.question;
+      q.shuffledOptions.forEach((opt, idx) => {
+        const div = document.createElement("div");
+        div.className = "option";
+        const input = document.createElement("input");
+        input.type = "radio";
+        input.name = "option";
+        input.value = idx;
+        const label = document.createElement("span");
+        label.textContent = opt;
+        div.appendChild(input);
+        div.appendChild(label);
+        div.addEventListener("click", () => selectOption(idx, div));
+        optionsEl.appendChild(div);
+      });
+      startTimerForQuestion();
+    }
+
+    function selectOption(idx, divEl) {
+      if (answered) return;
+      answered = true;
+      stopTimer();
+      const q = questions[currentIndex];
+      const optionsDivs = document.querySelectorAll(".option");
+      optionsDivs.forEach(d => {
+        const input = d.querySelector("input");
+        input.checked = false;
+        d.classList.remove("correct", "incorrect");
+      });
+      const input = divEl.querySelector("input");
+      input.checked = true;
+
+      if (idx === q.correctIndexShuffled) {
+        divEl.classList.add("correct");
+        feedbackEl.textContent = "Верно!";
+        feedbackEl.className = "correct-text";
+        score++;
+      } else {
+        divEl.classList.add("incorrect");
+        feedbackEl.textContent = "Неверно. Можешь посмотреть правильный ответ.";
+        feedbackEl.className = "incorrect-text";
+      }
+      scoreEl.textContent = "Счёт: " + score + " / " + questions.length;
+      nextBtn.disabled = false;
+    }
+
+    function showCorrectAnswer() {
+      const q = questions[currentIndex];
+      const optionsDivs = document.querySelectorAll(".option");
+      optionsDivs.forEach((d, idx) => {
+        d.classList.remove("correct");
+        if (idx === q.correctIndexShuffled) {
+          d.classList.add("correct");
+        }
+      });
+    }
+
+    function nextQuestion() {
+      currentIndex++;
+      loadQuestion();
+    }
+
+    function showFinalResult() {
+      finalResultEl.style.display = "block";
+      const percent = Math.round((score / questions.length) * 100);
+      finalResultEl.innerHTML =
+        "<strong>Квиз завершён.</strong><br>" +
+        "Правильных ответов: " + score + " из " + questions.length +
+        " (" + percent + "%)." +
+        "<br>Можешь нажать «Начать заново», чтобы пройти ещё раз — вопросы будут перемешаны.";
+    }
+
+    nextBtn.addEventListener("click", nextQuestion);
+    restartBtn.addEventListener("click", () => {
+      stopTimer();
+      startQuiz();
+    });
+    showAnswerBtn.addEventListener("click", showCorrectAnswer);
+
+    startQuiz();
+  </script>
+</body>
+</html>
