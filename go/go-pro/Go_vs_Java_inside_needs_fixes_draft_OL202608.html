@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go vs Java: внутренности — Hard/Extreme квиз</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2129;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --go-cyan: #00add8;
+    --java-orange: #f89820;
+    --good: #3fb950;
+    --bad: #f85149;
+    --warn: #d29922;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.5;
+  }
+  #app {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 24px 16px 80px;
+  }
+  header.top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  header.top h1 {
+    font-size: 1.25rem;
+    margin: 0;
+    font-weight: 700;
+  }
+  header.top h1 span.go { color: var(--go-cyan); }
+  header.top h1 span.java { color: var(--java-orange); }
+  .badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 20px;
+    background: linear-gradient(90deg, var(--bad), var(--warn));
+    color: #12100a;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  /* --- Start screen --- */
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+  }
+  .start-screen h2 { margin-top: 0; font-size: 1.4rem; }
+  .start-screen ul { color: var(--text-dim); padding-left: 20px; }
+  .start-screen li { margin-bottom: 6px; }
+  .topics {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 24px;
+  }
+  .topic-chip {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.82rem;
+  }
+  .btn {
+    appearance: none;
+    border: none;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 1rem;
+    padding: 13px 26px;
+    border-radius: 10px;
+    background: linear-gradient(90deg, var(--go-cyan), var(--accent));
+    color: #041018;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(88,166,255,0.35); }
+  .btn:active { transform: translateY(0); }
+  .btn.secondary {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn.wide { width: 100%; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* --- Progress / timer bar --- */
+  .progress-wrap {
+    margin-bottom: 16px;
+  }
+  .progress-row {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 0.85rem; color: var(--text-dim); margin-bottom: 6px;
+  }
+  .progress-bar-bg {
+    height: 6px; background: var(--panel-2); border-radius: 4px; overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .progress-bar-fill {
+    height: 100%; background: linear-gradient(90deg, var(--go-cyan), var(--accent));
+    width: 0%; transition: width 0.3s;
+  }
+  .timer-row {
+    display: flex; align-items: center; gap: 10px; margin-top: 10px;
+  }
+  .timer-circle {
+    position: relative; width: 46px; height: 46px; flex-shrink: 0;
+  }
+  .timer-circle svg { transform: rotate(-90deg); width: 46px; height: 46px; }
+  .timer-circle circle { fill: none; stroke-width: 4; }
+  .timer-bg { stroke: var(--panel-2); }
+  .timer-fg { stroke: var(--good); stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke 0.3s; }
+  .timer-num {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.78rem; font-weight: 700;
+  }
+  .timer-label { font-size: 0.85rem; color: var(--text-dim); }
+
+  /* --- Question card --- */
+  .q-card { padding: 26px; }
+  .q-meta {
+    display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .tag {
+    font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; padding: 3px 10px; border-radius: 20px;
+    background: var(--panel-2); color: var(--text-dim); border: 1px solid var(--border);
+  }
+  .q-text {
+    font-size: 1.12rem; font-weight: 600; margin-bottom: 18px;
+    white-space: pre-wrap;
+  }
+  .q-text pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+    color: #7ee787;
+    margin: 10px 0;
+    white-space: pre;
+  }
+  .q-text code {
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+    background: #010409;
+    border: 1px solid var(--border);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.88em;
+    color: #7ee787;
+  }
+  .options { display: flex; flex-direction: column; gap: 10px; }
+  .option {
+    display: flex; align-items: flex-start; gap: 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 13px 16px;
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.96rem;
+    color: var(--text);
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .option:hover:not(.disabled) {
+    border-color: var(--accent);
+    background: #1a2230;
+  }
+  .option .letter {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.78rem; font-weight: 700; color: var(--text-dim);
+  }
+  .option.correct {
+    border-color: var(--good);
+    background: rgba(63, 185, 80, 0.12);
+  }
+  .option.correct .letter { background: var(--good); color: #04150a; border-color: var(--good); }
+  .option.incorrect {
+    border-color: var(--bad);
+    background: rgba(248, 81, 73, 0.12);
+  }
+  .option.incorrect .letter { background: var(--bad); color: #1a0403; border-color: var(--bad); }
+  .option.disabled { cursor: default; }
+  .option.dim { opacity: 0.55; }
+
+  /* --- Explanation --- */
+  .explain-box {
+    margin-top: 18px;
+    padding: 16px 18px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    display: none;
+    animation: fadeIn 0.25s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  .explain-box.show { display: block; }
+  .explain-title {
+    font-weight: 700; font-size: 0.85rem; text-transform: uppercase;
+    letter-spacing: 0.04em; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
+  }
+  .explain-title.ok { color: var(--good); }
+  .explain-title.no { color: var(--bad); }
+  .explain-title.timeout { color: var(--warn); }
+  .explain-text { font-size: 0.94rem; color: var(--text); }
+  .explain-text b { color: var(--java-orange); }
+  .explain-text code {
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+    background: #010409; border: 1px solid var(--border);
+    padding: 1px 5px; border-radius: 4px; font-size: 0.88em; color: #7ee787;
+  }
+  .next-row { margin-top: 20px; display: flex; justify-content: flex-end; }
+
+  /* --- Result screen --- */
+  .result-screen { text-align: center; padding: 40px 28px; }
+  .result-score {
+    font-size: 3.2rem; font-weight: 800; margin: 10px 0;
+    background: linear-gradient(90deg, var(--go-cyan), var(--accent));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .result-sub { color: var(--text-dim); margin-bottom: 24px; }
+  .result-grade {
+    display: inline-block; padding: 6px 18px; border-radius: 20px;
+    font-weight: 700; font-size: 0.95rem; margin-bottom: 24px;
+  }
+  .result-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .review-list { text-align: left; margin-top: 28px; }
+  .review-item {
+    padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px;
+    margin-bottom: 8px; font-size: 0.88rem; display: flex; gap: 10px; align-items: flex-start;
+    background: var(--panel-2);
+  }
+  .review-item .icon { flex-shrink: 0; font-weight: 700; }
+  .review-item.ok .icon { color: var(--good); }
+  .review-item.no .icon { color: var(--bad); }
+
+  footer.hint {
+    text-align: center; color: var(--text-dim); font-size: 0.78rem; margin-top: 24px;
+  }
+
+  @media (max-width: 600px) {
+    .q-card, .card { padding: 18px; }
+    .q-text { font-size: 1.02rem; }
+    header.top h1 { font-size: 1.05rem; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header class="top">
+    <h1><span class="go">Go</span> vs <span class="java">Java</span>: внутренности</h1>
+    <span class="badge">Hard / Extreme · 50 вопросов</span>
+  </header>
+
+  <!-- START SCREEN -->
+  <div id="start-screen" class="card start-screen">
+    <h2>Слайсы, мапы, строки, указатели и рантайм</h2>
+    <p style="color: var(--text-dim);">
+      50 вопросов уровня hard/extreme про внутреннее устройство Go в сравнении с Java: как устроены слайсы и мапы (включая Swiss Table в Go 1.24+), почему rune ≠ char, чем указатели отличаются от ссылок, где прячутся области видимости и самые частые ошибки на собеседованиях.
+    </p>
+    <div class="topics">
+      <span class="topic-chip">map / Swiss Table</span>
+      <span class="topic-chip">slices vs iterating</span>
+      <span class="topic-chip">rune vs char</span>
+      <span class="topic-chip">strings / []byte</span>
+      <span class="topic-chip">ranges</span>
+      <span class="topic-chip">pointers vs references</span>
+      <span class="topic-chip">области видимости</span>
+      <span class="topic-chip">GC / goroutines</span>
+    </div>
+    <ul>
+      <li>На каждый вопрос — <b>1 минута</b>. Таймер виден постоянно, при истечении вопрос засчитывается как неверный.</li>
+      <li>После выбора ответа сразу показывается подробное объяснение: почему правильно именно так и в чём отличие от Java.</li>
+      <li>Назад вернуться нельзя — отвечайте вдумчиво, как на реальном собеседовании.</li>
+    </ul>
+    <button class="btn wide" id="start-btn">Начать квиз →</button>
+  </div>
+
+  <!-- QUIZ SCREEN -->
+  <div id="quiz-screen" style="display:none;">
+    <div class="progress-wrap">
+      <div class="progress-row">
+        <span id="progress-label">Вопрос 1 / 50</span>
+        <span id="score-label">Верно: 0</span>
+      </div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-fill"></div></div>
+      <div class="timer-row">
+        <div class="timer-circle">
+          <svg viewBox="0 0 46 46">
+            <circle class="timer-bg" cx="23" cy="23" r="20"></circle>
+            <circle class="timer-fg" id="timer-fg" cx="23" cy="23" r="20"
+                    stroke-dasharray="125.6" stroke-dashoffset="0"></circle>
+          </svg>
+          <div class="timer-num" id="timer-num">60</div>
+        </div>
+        <span class="timer-label">осталось секунд на этот вопрос</span>
+      </div>
+    </div>
+
+    <div class="card q-card">
+      <div class="q-meta">
+        <span class="tag" id="q-index-tag">Вопрос 1/50</span>
+        <span class="tag" id="q-difficulty-tag">HARD/EXTREME</span>
+      </div>
+      <div class="q-text" id="q-text"></div>
+      <div class="options" id="options-container"></div>
+
+      <div class="explain-box" id="explain-box">
+        <div class="explain-title" id="explain-title"></div>
+        <div class="explain-text" id="explain-text"></div>
+      </div>
+
+      <div class="next-row">
+        <button class="btn" id="next-btn" style="display:none;">Следующий вопрос →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULT SCREEN -->
+  <div id="result-screen" class="card result-screen" style="display:none;">
+    <div style="font-size: 0.9rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em;">Результат</div>
+    <div class="result-score" id="result-score">0 / 50</div>
+    <div class="result-grade" id="result-grade"></div>
+    <div class="result-sub" id="result-sub"></div>
+    <div class="result-actions">
+      <button class="btn" id="restart-btn">Пройти заново</button>
+      <button class="btn secondary" id="review-btn">Показать разбор ошибок</button>
+    </div>
+    <div class="review-list" id="review-list" style="display:none;"></div>
+  </div>
+
+  <footer class="hint">Go vs Java internals quiz · слайсы, мапы, Swiss Table, rune/char, strings/bytes, pointers/references</footer>
+</div>
+
+<script>
+const QUIZ_DATA = [{"q": "В Go карта (map) реализована как hash table с бакетами (до Go 1.24) или Swiss Table (Go 1.24+). Что произойдёт при попытке взять адрес значения карты — <code>v := &m[\"key\"]</code>?", "options": ["Скомпилируется, v будет указывать на реальный слот в карте", "Ошибка компиляции: cannot take address of map value", "Скомпилируется, но v всегда nil", "Работает только для карт с интерфейсными значениями"], "correct": 1, "explain": "Go запрещает брать адрес элемента map, потому что при росте карты (rehash) элементы физически перемещаются между бакетами/группами — указатель тут же стал бы висячим (dangling). В отличие от слайсов, где элементы адресуемы (<code>&s[i]</code> валиден до реаллокации), map-значения в Go принципиально неадресуемы. <b>В Java</b> HashMap хранит значения как ссылки (Object), и вы всегда работаете через <code>map.get(key)</code>, получая ссылку на объект в куче — сам объект не перемещается при рехэшировании, перемещаются только Entry-обёртки в таблице бакетов. Поэтому в Java «взять адрес» значения — это просто скопировать ссылку, и она остаётся валидной."}, {"q": "Начиная с Go 1.24, runtime map была переписана на основе алгоритма Swiss Table (взят из абстракции Abseil от Google). Какое ключевое структурное отличие Swiss Table от старой реализации Go map (buckets по 8 элементов + overflow buckets)?", "options": ["Swiss Table использует SIMD-инструкции и control-байты для параллельного сравнения хэшей в группе слотов", "Swiss Table хранит элементы в отдельном linked list, как java.util.HashMap до Java 8", "Swiss Table гарантирует O(1) даже в худшем случае за счёт красно-чёрных деревьев", "Swiss Table убирает необходимость хэш-функции, используя прямую индексацию"], "correct": 0, "explain": "Swiss Table хранит рядом с данными компактный массив control-байтов (по одному на слот в группе), которые кодируют: пусто/удалено/занято + 7 бит хэша. Поиск сравнивает control-байты группы одной SIMD-инструкцией (или эмуляцией через битовые трюки на архитектурах без SIMD), что резко снижает число кэш-промахов по сравнению с обходом overflow-бакетов старой реализации. <b>В Java</b> HashMap с Java 8+ при коллизиях внутри одного бакета переключается с linked list на red-black tree, если бакет содержит ≥8 элементов — это защита от O(n) при плохих хэшах/атаках, но иная стратегия, ориентированная не на SIMD, а на асимптотику в худшем случае."}, {"q": "Что выведет следующий код?\n<pre>m := map[string]int{\"a\": 1}\nfor k, v := range m {\n    m[\"b\"] = 2\n    fmt.Println(k, v)\n}</pre>", "options": ["Гарантированно выведет только \"a 1\", новый элемент \"b\" никогда не попадёт в текущую итерацию", "Детерминированно выведет \"a 1\" затем \"b 2\"", "Panic: concurrent map iteration and map write", "Неопределённо: \"b\" может попасть или не попасть в итерацию, порядок вообще не гарантирован"], "correct": 3, "explain": "Спецификация Go явно говорит: порядок итерации по map не специфицирован (и рандомизируется runtime намеренно), а добавление элементов во время итерации может привести к тому, что новый элемент будет выдан на итерации или пропущен — оба варианта допустимы языком. Единственная гарантия: элемент, не изменявшийся во время итерации, будет выдан максимум один раз. Panic будет только при конкурентном доступе из разных горутин без синхронизации, а не при изменении в том же потоке. <b>В Java</b> HashMap кидает <code>ConcurrentModificationException</code> при структурной модификации внутри обычного for-each (через fail-fast iterator, основанный на modCount) — то есть Java гарантированно завершится с ошибкой, а Go — нет, там просто неопределённое поведение выдачи."}, {"q": "Слайс в Go описывается тройкой (pointer, len, cap). Что произойдёт при выполнении:\n<pre>a := make([]int, 3, 5)\nb := a[1:3]\nb = append(b, 99)\nfmt.Println(a)</pre>", "options": ["a останется [0 0 0], т.к. b — это полностью новый слайс", "Panic: index out of range", "a изменится, потому что b делит один и тот же underlying array с a и cap позволяет append писать в него", "Компилятор не позволит append на слайсе, полученном через переслайсинг"], "correct": 2, "explain": "b := a[1:3] имеет len=2, но cap = 5-1 = 4 (cap считается от начала подмассива до конца исходного underlying array). append(b, 99) добавляет элемент в позицию с индексом len(b)=2 внутри общего массива, то есть по абсолютному индексу 1+2=3 массива a — это a[3]. Так как cap хватает, новый underlying array не аллоцируется, и запись 99 попадает прямо в память a. Итог: a становится [0 0 0 99 0]. Это классическая ловушка для новичков и частый вопрос на собеседованиях. <b>В Java</b> такого явления вообще не существует — массивы фиксированной длины, а <code>List.subList()</code> хоть и является view на родительский список, всё ещё не работает через (pointer,len,cap) модель, а через индексные смещения с проверкой modCount, и там свои неожиданности (ConcurrentModificationException), но не «невидимая перезапись» через cap."}, {"q": "Почему <code>len(cap(a))</code> триплет слайса делает передачу слайса в функцию похожей на 'pass by value', но с эффектом изменения общих данных?", "options": ["Слайс передаётся как reference type целиком, аналогично Java-объектам", "Копируется сам заголовок слайса (struct из pointer/len/cap), но underlying array общий — поэтому мутация элементов видна вызывающему, а изменение len/cap/append в общем случае не видно", "Go всегда копирует весь массив при передаче слайса в функцию", "Слайс передаётся по указателю на структуру slice header автоматически"], "correct": 1, "explain": "Go — язык pass-by-value для всех типов, включая слайсы. Но slice — это маленькая структура-дескриптор {ptr, len, cap}. Копируется дескриптор, а не данные — оба дескриптора смотрят на один массив. Поэтому <code>s[i] = x</code> внутри функции виден снаружи, а <code>s = append(s, x)</code> (если происходит реаллокация или просто меняет len локальной копии) — не виден снаружи, если не возвращать новый слайс. Это гибридное поведение путает разработчиков с опытом Java. <b>В Java</b> нет понятия slice header — массивы и коллекции передаются как ссылки на объект целиком; любое изменение через любую ссылку видно всем, а сама 'длина' массива неизменна (final), у ArrayList своя внутренняя пересборка через System.arraycopy, скрытая от пользователя."}, {"q": "Что делает встроенная функция <code>copy(dst, src []T)</code> в Go в контексте безопасного клонирования данных, и какая проблема остаётся нерешённой при поверхностном copy слайса структур с указателями?", "options": ["copy создаёт глубокую (deep) копию рекурсивно для любых типов", "copy копирует min(len(dst), len(src)) элементов поверхностно — указатели внутри структур продолжают указывать на общие объекты", "copy автоматически расширяет dst, если он меньше src", "copy работает только для []byte"], "correct": 1, "explain": "copy — это shallow copy: она копирует значения элементов (включая указатели как значения), но не то, на что они указывают. Если элементы слайса — структуры с полями-указателями или сами слайсы/мапы, то после copy оба слайса будут делить общие вложенные объекты. Это прямая параллель на Java-уровне понятий shallow vs deep copy. <b>В Java</b> аналогично: <code>Arrays.copyOf()</code>, <code>clone()</code> на массиве или <code>new ArrayList<>(list)</code> тоже делают поверхностную копию — ссылки на объекты копируются, а не сами объекты. Разница лишь в том, что Go явно даёт copy как примитив языка для слайсов, а Java использует библиотечные методы объектов-контейнеров."}, {"q": "В чём заключается ключевое отличие rune в Go от char в Java при работе с Unicode-текстом?", "options": ["rune — это alias для byte (8 бит), char — 16 бит, поэтому они эквивалентны с точностью до размера", "rune — это alias для int32, представляющий один code point Unicode (UTF-32 по факту), char — это UTF-16 code unit, из-за чего символы за пределами BMP (эмодзи, редкие иероглифы) в Java требуют суррогатной пары из двух char", "char в Java может представлять любой Unicode code point в одном значении, а rune Go не может", "rune и char идентичны, различие только в названии типа"], "correct": 1, "explain": "rune = int32 и всегда хранит один полный Unicode code point (значения до U+10FFFF). char в Java — 16-битный UTF-16 code unit; code points из Supplementary Planes (>U+FFFF, например большинство эмодзи 🎉, некоторые иероглифы) не влезают в 16 бит и представляются двумя char (surrogate pair — high/low surrogate). Из-за этого <code>str.charAt(i)</code> в Java может вернуть половину суррогатной пары — это классическая ошибка при работе с эмодзи в Java, требующая <code>codePointAt()</code>. В Go при итерации <code>for _, r := range s</code> вы всегда получаете целый code point сразу, без ручной сборки суррогатов."}, {"q": "Что произойдёт при выполнении <code>s := \"héllo\"; fmt.Println(len(s))</code>, если строка сохранена в UTF-8, а 'é' — это U+00E9 (2 байта в UTF-8)?", "options": ["len(s) вернёт 5 — количество символов", "len(s) вернёт 6 — количество байт в UTF-8 представлении, а не количество рун/символов", "len(s) вызовет panic для non-ASCII строк", "len(s) вернёт 5, потому что é считается одним UTF-8 кластером"], "correct": 1, "explain": "В Go строка — это неизменяемая последовательность байт (обычно UTF-8, но язык не проверяет валидность при обычных операциях). len(s) всегда возвращает количество байт, а не рун. 'héllo' = h,é(2 байта: 0xC3 0xA9),l,l,o = 1+2+1+1+1 = 6 байт. Чтобы получить количество рун (символов), нужно <code>utf8.RuneCountInString(s)</code> или <code>len([]rune(s))</code>. <b>В Java</b> String хранит данные как UTF-16 (или Latin1 с compact strings с Java 9+ внутри), и <code>.length()</code> возвращает число char (code units), не байт — 'héllo'.length() будет 5, так как é укладывается в 1 char. Ключевое отличие: Go считает байты, Java считает 16-битные code units — оба «не совсем символы» в общем случае Unicode, но по разным причинам."}, {"q": "Почему индексация строки в Go (<code>s[i]</code>) возвращает byte, а не rune, и какие последствия это имеет для non-ASCII текста?", "options": ["s[i] всегда возвращает rune, как charAt в Java", "s[i] возвращает один байт UTF-8 представления; для многобайтовых code points это даёт 'обрезанный' мусорный байт, а не символ", "s[i] возвращает ошибку компиляции для строк с non-ASCII символами", "s[i] автоматически декодирует до границы рун"], "correct": 1, "explain": "Строки в Go — это по сути []byte с гарантией неизменяемости и обычно UTF-8 содержимым, но индексация работает на уровне байт, а не рун, потому что декодирование UTF-8 переменной длины (1-4 байта на code point) не может быть O(1) при произвольном доступе. Если взять s[1] у строки 'héllo', вы получите один из двух байт кодирования é — не валидный символ сам по себе. Правильный способ итерации — <code>for i, r := range s</code>, который декодирует UTF-8 и даёт i как байтовый индекс начала руны, r — саму руну. <b>В Java</b> String.charAt(i) — O(1) операция, потому что UTF-16 code unit фиксированного размера (2 байта), хотя это тоже может вернуть половину суррогатной пары для code points вне BMP — просто иная природа поломки на других данных."}, {"q": "Какова принципиальная разница между []byte и string в Go при передаче в функцию, влияющая на производительность конкатенации строк в цикле?", "options": ["string изменяем, поэтому конкатенация в цикле эффективна без дополнительных аллокаций", "string неизменяем — каждая конкатенация s += x создаёт новый массив байт и копирует старые данные, что даёт O(n²) для n конкатенаций; []byte или strings.Builder позволяют переиспользовать буфер", "[]byte и string полностью взаимозаменяемы без накладных расходов на конвертацию", "В Go конкатенация строк оптимизируется компилятором автоматически в O(n) в любом случае"], "correct": 1, "explain": "string в Go неизменяем (immutable), как и String в Java. <code>s = s + \"x\"</code> в цикле на каждой итерации аллоцирует новый массив байт нужного размера и копирует всё содержимое — классическая ловушка O(n²). Решение — <code>strings.Builder</code> (появился в Go 1.10), который использует растущий []byte буфер внутри и amortized O(1) на Write. Конвертация []byte(s) и string(b) при этом каждый раз копирует данные (кроме нескольких компиляторных оптимизаций для конкретных паттернов вроде map[string(b)]). <b>В Java</b> String тоже immutable, и решение идентичное по духу — <code>StringBuilder</code> с внутренним растущим char[] (или byte[] при compact strings), amortized O(1) append. Обе экосистемы пришли к одному архитектурному решению независимо."}, {"q": "В чём разница между указателями (pointers) в Go и ссылками (references) в Java на уровне семантики языка?", "options": ["Указатели и ссылки полностью идентичны, различие чисто терминологическое", "Go-указатели поддерживают явную арифметику как в C и разыменование через *; Java-ссылки — это неявные хендлы на объекты в куче без синтаксиса разыменования и без арифметики указателей вообще", "Java-ссылки поддерживают указательную арифметику через Unsafe по умолчанию", "Go запрещает разыменование указателей вне unsafe пакета"], "correct": 1, "explain": "Go-указатель — это типизированный адрес переменной; синтаксис <code>*p</code> явно разыменовывает, <code>&x</code> явно берёт адрес, можно иметь указатель на указатель (**T), но арифметика указателей (p++, p+1) запрещена в safe Go (доступна только через unsafe.Pointer). Java-ссылка — абстракция более высокого уровня: нет синтаксиса взятия адреса или разыменования, компилятор/JVM сами решают, когда копировать ссылку, а объект в куче недостижим напрямую. Го-указатели могут указывать на любую переменную, включая локальные на стеке (компилятор проведёт escape analysis и переместит в кучу при необходимости) — в Java такого управления нет вообще, все объекты живут только в куче (примитивы — по значению)."}, {"q": "Что выведет код?\n<pre>type T struct{ X int }\nfunc modify(t T) { t.X = 100 }\nfunc modifyPtr(t *T) { t.X = 100 }\nfunc main() {\n    a := T{X: 1}\n    modify(a)\n    fmt.Println(a.X)\n    modifyPtr(&a)\n    fmt.Println(a.X)\n}</pre>", "options": ["1, затем 100 — structs передаются по значению всегда, если явно не передан указатель", "100, затем 100 — Go передаёт структуры по ссылке аналогично Java-объектам", "1, затем 1 — Go никогда не позволяет изменить структуру через указатель без explicit deref", "Ошибка компиляции на строке modifyPtr(&a)"], "correct": 0, "explain": "Go всегда pass-by-value. modify(a) копирует всю структуру T в параметр t функции — изменение t.X никак не влияет на a, выведется 1. modifyPtr(&a) передаёт указатель (адрес a) — внутри t.X = 100 автоматически разыменовывает t (синтаксический сахар вместо (*t).X) и меняет исходную память, выведется 100. <b>В Java</b> нет структур со значенческой семантикой (кроме примитивов и, с Java 21+, экспериментальных value classes/records в проектах Valhalla) — обычные классы всегда объекты в куче, и любой метод получает копию ссылки на тот же объект, поэтому изменение полей внутри метода видно вызывающему без explicit указателей — поведение похоже на modifyPtr по умолчанию, а concept modify() в чистом виде для объектов в Java невозможен без ручного клонирования."}, {"q": "Как в Go работает escape analysis и почему это делает разницу stack/heap allocation менее заметной для программиста, чем в языках без такого анализа?", "options": ["Go всегда аллоцирует все переменные в куче, escape analysis не существует", "Компилятор Go статически определяет, 'убегает' ли переменная за пределы функции (например, возвращается по указателю или сохраняется в глобальную структуру); если нет — она размещается на стеке даже если создана через new/&T{}, если да — переезжает в кучу автоматически", "Escape analysis работает только в runtime через GC, а не в compile-time", "В Go программист обязан явно указывать stack или heap для каждой переменной"], "correct": 1, "explain": "Escape analysis — это статический анализ компилятора Go, определяющий время жизни объекта. <code>&T{}</code> внутри функции не обязательно означает heap-аллокацию — если компилятор докажет, что указатель не покидает функцию (не возвращается, не сохраняется в кучу через другую структуру, не передаётся в горутину/интерфейс, для которого нужен boxing), объект живёт на стеке, и его память освобождается автоматически при возврате из функции — без участия GC. Это можно проверить флагом <code>go build -gcflags='-m'</code>. <b>В Java</b> все объекты (кроме примитивов) принципиально аллоцируются в куче согласно спецификации JVM; современные JIT-компиляторы (HotSpot) применяют похожую по духу оптимизацию — escape analysis для scalar replacement и stack allocation в JIT-скомпилированном коде — но это runtime-оптимизация JIT, необязательная и не гарантированная спецификацией, в отличие от Go, где это часть модели компиляции AOT."}, {"q": "Какова область видимости (scope) переменной, объявленной в теле if, и как это отличается от блочной видимости в Java?", "options": ["Go и Java идентичны — переменные видимы только в блоке if, где объявлены, и опционально в связанных else if/else", "В Go переменные в if существуют глобально после блока, в Java — только внутри блока", "В Go нет области видимости для if-блоков вообще", "Java не поддерживает объявление переменных внутри if"], "correct": 0, "explain": "Здесь Go и Java фактически совпадают по духу: обе используют лексическую блочную видимость (block scoping) — переменная, объявленная <code>if x := f(); x > 0 {...}</code> в Go видна в самом if, во всех else if и else этой цепочки, но не после блока. Java аналогично ограничивает видимость { } блоком. Главное отличие Go — короткий синтаксис инициализации <code>if init; cond {}</code>, позволяющий объявить переменную прямо в условии (типичный паттерн — <code>if v, ok := m[\"k\"]; ok { ... }</code>), которого в Java нет вообще — там нужен отдельный оператор перед if."}, {"q": "Классическая ловушка Go: что выведет код?\n<pre>funcs := make([]func(), 0)\nfor i := 0; i < 3; i++ {\n    funcs = append(funcs, func() { fmt.Println(i) })\n}\nfor _, f := range funcs {\n    f()\n}</pre>\n(рассмотреть версии Go до 1.22 и Go 1.22+)", "options": ["0 1 2 в любой версии Go, так как замыкание всегда захватывает копию i", "До Go 1.22: 3 3 3 (все замыкания делят одну переменную i из цикла); начиная с Go 1.22: 0 1 2 (каждая итерация создаёт новый экземпляр i)", "3 3 3 во всех версиях Go, потому что замыкания в Go всегда захватывают по ссылке навсегда", "Ошибка компиляции — Go не разрешает захват переменной цикла в замыкании"], "correct": 1, "explain": "Это одно из самых обсуждаемых изменений в истории Go. До версии 1.22, переменная i в <code>for i := 0; ...</code> была ОДНОЙ переменной, переиспользуемой на каждой итерации — все замыкания захватывали указатель на эту единственную переменную, и к моменту вызова f() цикл уже завершился с i=3, поэтому печаталось 3 3 3. Начиная с Go 1.22 (выпущен в 2024), семантика изменилась: каждая итерация for создаёт новую переменную i, поэтому замыкания захватывают разные экземпляры, и печатается 0 1 2 — как интуитивно ожидает большинство разработчиков. <b>В Java</b> такой проблемы никогда не было, потому что лямбды могут захватывать только effectively final локальные переменные — компилятор просто не скомпилирует код, где переменная цикла переиспользуется и захватывается с изменением, вынуждая разработчика либо использовать final копию, либо массив/AtomicInteger для мутируемого захвата."}, {"q": "Почему nil map в Go можно читать, но не записывать, а в Java нет прямого аналога такому поведению?", "options": ["nil map полностью неотличим от обычной пустой map во всех операциях, включая запись", "Чтение из nil map возвращает zero value (как из пустой map), но запись m[k]=v в nil map вызывает panic: assignment to entry in nil map — потому что нет underlying hmap структуры для выделения бакета", "nil map автоматически инициализируется при первой записи, аналогично Java HashMap с lazy init", "Запись в nil map тихо игнорируется без panic"], "correct": 1, "explain": "map в Go — это указатель на runtime-структуру hmap (или её Swiss Table аналог). nil map — это просто nil-указатель. Чтение <code>m[k]</code> у nil map безопасно, потому что реализовано как проверка 'указатель nil → вернуть zero value', без обращения к памяти структуры. Но запись требует существующей структуры для хранения бакетов/групп, поэтому Go паникует явно, вместо неявной lazy-инициализации — это осознанное дизайнерское решение (явность вместо магии). <b>В Java</b> нет 'nil-подобной' HashMap с частичной функциональностью — переменная типа Map либо содержит ссылку на реальный объект (даже пустой HashMap полностью функционален включая put), либо null, и любой вызов метода на null-ссылке (включая .get()) немедленно бросает NullPointerException, без差ференциации чтение/запись."}, {"q": "Что произойдёт при попытке сравнить две map через оператор == в Go?", "options": ["Скомпилируется и сравнит map по значению — true если содержат одинаковые пары ключ-значение", "Ошибка компиляции: map can only be compared to nil (кроме сравнения с nil)", "Скомпилируется, но всегда возвращает false", "Скомпилируется и сравнивает адреса указателей на hmap"], "correct": 1, "explain": "В Go map, slice и func — некомпарируемые типы (несравнимые оператором ==), кроме явного сравнения с nil (<code>m == nil</code>). Это осознанное ограничение языка: глубокое сравнение map было бы дорогой скрытой операцией (O(n)), а сравнение указателей давало бы confusing семантику (две карты с одинаковым содержимым — не равны). Чтобы сравнить содержимое, нужно писать сравнение вручную или использовать <code>reflect.DeepEqual</code> / <code>maps.Equal</code> (Go 1.21+). <b>В Java</b> оператор == для Map всегда сравнивает ссылки (identity), но интерфейс Map определяет .equals() как контракт глубокого структурного сравнения (все реализации HashMap/TreeMap переопределяют equals для сравнения по ключам/значениям) — то есть Java даёт возможность content equality через explicit метод, тогда как Go не даёт такой возможности через встроенный оператор вовсе."}, {"q": "Почему в Go структура-значение (не указатель) как ключ map работает корректно только если все поля comparable, и что это означает для полей-слайсов?", "options": ["Любая структура автоматически подходит как ключ map независимо от полей", "Структура может быть ключом map только если все её поля — comparable типы (числа, строки, указатели, массивы, другие comparable структуры); наличие поля-слайса, map или func сделает всю структуру некомпарируемой и вызовет panic в runtime при попытке использовать как ключ (или ошибку компиляции, если это выявляется статически)", "Слайсы внутри структуры автоматически конвертируются в массивы для сравнения", "Go запрещает использовать структуры как ключи map в принципе"], "correct": 1, "explain": "Компаратор для structural key в map строится Go compiler-ом на основе сравнения == всех полей. Если тип структуры статически содержит поле типа slice/map/func, компилятор выдаст ошибку прямо при попытке объявить <code>map[StructWithSlice]V</code>. Если некомпарируемость скрыта за интерфейсным полем (interface{} может содержать любой тип), ошибка проявится в runtime как panic: <code>runtime error: hash of unhashable type</code> при первой операции с картой. <b>В Java</b> любой объект технически можно использовать как ключ HashMap (Object.hashCode()/equals() определены для всех объектов по умолчанию через identity), но 'корректность' зависит от того, переопределены ли hashCode/equals осмысленно — если объект мутабельный и его hashCode меняется после вставки в карту, ключ 'теряется' (не найти по новому hashCode), это runtime-логическая ошибка, а не паника/ошибка компиляции, что делает такие баги в Java более скрытыми и незаметными."}, {"q": "Как Go реализует полиморфизм без наследования классов, и в чём разница структурной типизации интерфейсов (structural/implicit) от номинальной (nominal/explicit) в Java?", "options": ["Go требует явного implements ключевого слова, как Java", "Go-интерфейсы удовлетворяются implicitly — любой тип, реализующий нужный набор методов, автоматически подходит под интерфейс без явной декларации связи; Java требует явного implements/extends в объявлении класса", "В Go интерфейсы можно реализовать только для встроенных типов", "Java интерфейсы тоже implicit, начиная с Java 8"], "correct": 1, "explain": "Go использует structural typing (duck typing на этапе компиляции): если тип T имеет все методы, объявленные в интерфейсе I (с точным совпадением сигнатур), то T автоматически удовлетворяет I — никакой явной связи в коде не требуется, и один тип может 'молча' реализовывать множество интерфейсов, включая те, что определены в других, ничего не знающих о нём пакетах. Java использует nominal typing: класс должен явно написать <code>implements SomeInterface</code>, и эта связь фиксируется в байткоде класса — рефлексия может проверить 'implements' явно, а сам интерфейс не может быть 'случайно' удовлетворён. Practical следствие: в Go легко писать retroactive interfaces (адаптировать существующий тип под новый интерфейс без его модификации), в Java для этого нужен явный wrapper/adapter класс."}, {"q": "В чём разница nil-интерфейса в Go (типизированный nil внутри интерфейса) от null в Java, вызывающая известную ловушку 'nil != nil'?", "options": ["nil-интерфейс в Go всегда равен nil независимо от того, как он был создан", "Интерфейс в Go — это пара (тип, значение); если переменная интерфейсного типа получила typed nil указатель (например *MyError(nil)), то сам интерфейс не равен nil, потому что тип-часть пары установлена, хотя значение-часть nil — классическая ловушка error != nil при возврате typed nil из функции", "В Java аналогичная проблема тоже существует буквально идентично", "nil-интерфейс существует только для указателей, не для других типов"], "correct": 1, "explain": "Интерфейсное значение в Go внутри представлено двумя словами: указатель на таблицу методов конкретного типа (itab) и указатель на данные. <code>var p *MyError = nil; var err error = p</code> — теперь err имеет type=*MyError, data=nil — итоговое сравнение <code>err == nil</code> вернёт FALSE, потому что type-часть не пустая, хотя интуитивно кажется что err 'равен nil'. Это ловит даже опытных Go-разработчиков при паттерне <code>func f() error { var e *MyError; ...; return e }</code>. <b>В Java</b> null — это единственное специальное значение без информации о типе (null просто null, независимо от объявленного статического типа переменной), поэтому такой двойственности нет: если ссылка null, она null, сравнение == null всегда работает предсказуемо независимо от статического типа переменной."}, {"q": "Что произойдёт при range по слайсу структур (не указателей), если внутри цикла изменять элемент через переменную цикла?\n<pre>type P struct{ X int }\nps := []P{{1}, {2}, {3}}\nfor _, p := range ps {\n    p.X = 100\n}\nfmt.Println(ps)</pre>", "options": ["[{100} {100} {100}] — range передаёт указатели на элементы", "[{1} {2} {3}] — p это КОПИЯ каждого элемента слайса, изменение копии не влияет на исходный слайс", "Ошибка компиляции — нельзя изменять поле переменной цикла range", "[{100} {2} {3}] — изменяется только первый элемент"], "correct": 1, "explain": "range по слайсу копирует каждый элемент в переменную цикла (p — это value copy для структур, не reference). Изменение p.X меняет только локальную копию, исходный слайс ps остаётся [{1} {2} {3}]. Чтобы изменить исходные данные, нужно либо <code>for i := range ps { ps[i].X = 100 }</code> (индексный доступ к исходному массиву), либо range по слайсу указателей <code>[]*P</code>. Это одна из самых частых причин 'необновляемых' структур на код-ревью у новичков. <b>В Java</b> for-each (<code>for (P p : ps)</code>) по коллекции объектов даёт ссылку на тот же объект в куче (объекты в Java всегда passed/stored by reference), поэтому <code>p.x = 100</code> сразу видно во всей коллекции — прямо противоположное Go поведение для той же на первый взгляд конструкции, что и создаёт путаницу у разработчиков, переходящих между языками."}, {"q": "Как устроена память слайса срезов срезов (slice of slices) при append, и почему клонирование 2D-слайса требует ручного deep copy?", "options": ["append на []([]T) автоматически глубоко копирует вложенные слайсы", "Внешний слайс — это последовательность slice header'ов (по 24 байта каждый: ptr+len+cap на 64-бит), но append/copy внешнего слайса копирует только header'ы, оставляя внутренние слайсы (и их underlying arrays) общими между копиями — нужен явный вложенный цикл copy для истинного deep copy", "В Go 2D-слайсы физически хранятся как один непрерывный блок памяти автоматически", "Go не поддерживает слайсы слайсов, только явные многомерные массивы"], "correct": 1, "explain": "<code>matrix := make([][]int, 3)</code> создаёт слайс из 3 slice header'ов (каждый nil до инициализации). Если сделать <code>matrix2 := append([][]int{}, matrix...)</code>, скопируются только внешние header'ы — matrix2[0] и matrix[0] будут указывать на ОДИН И ТОТ ЖЕ underlying array внутренней строки. Изменение matrix2[0][0] изменит и matrix[0][0]. Настоящий deep copy требует ручного цикла: для каждой строки создать новый слайс и copy() в него. <b>В Java</b> аналогичная ситуация с int[][] (массив массивов) — <code>Arrays.copyOf(matrix, matrix.length)</code> тоже копирует только верхний уровень ссылок на подмассивы (shallow copy), и <code>int[][] clone = matrix.clone()</code> имеет ту же проблему — для честного deep copy нужен <code>Arrays.stream(matrix).map(int[]::clone).toArray(int[][]::new)</code> или ручной цикл. Проблема идентична по природе в обоих языках, потому что оба используют reference-based вложенные контейнеры."}, {"q": "Что означает термин 'zero value' в Go, и почему это принципиально отличается от значения по умолчанию для объектных полей в Java?", "options": ["zero value применим только к примитивным типам, как default values в Java", "Каждый тип в Go имеет детерминированное zero value без явной инициализации (0 для чисел, \"\" для строк, nil для указателей/слайсов/мап/каналов/интерфейсов/функций, а для структур — рекурсивно zero value каждого поля) — переменные Go всегда 'готовы к использованию' сразу после объявления, включая составные структуры без вызова конструктора", "Zero value требует явного вызова конструктора для структур, как в Java", "В Go zero value непредсказуем и зависит от содержимого памяти на момент аллокации"], "correct": 1, "explain": "Go гарантирует, что <code>var x T</code> для ЛЮБОГО типа T даёт детерминированное, полностью инициализированное значение — это часть спецификации языка, memory всегда зануляется при аллокации (в отличие от C, где uninitialized memory может содержать мусор). Для структуры это рекурсивно применяется к каждому полю, что позволяет писать структуры, полезные сразу 'из коробки' без конструктора (например, <code>var buf bytes.Buffer</code> сразу готов к Write). <b>В Java</b> поля объектов (instance fields) тоже автоматически получают default values (0/false/null) при создании через new — похожая гарантия для полей класса. Но локальные переменные в Java, в отличие от Go, ОБЯЗАТЕЛЬНО должны быть явно инициализированы перед использованием — компилятор Java требует definite assignment и не компилирует код с потенциально неинициализированной локальной переменной, тогда как Go позволяет использовать <code>var x int</code> сразу же со значением 0 без явного присвоения."}, {"q": "В чём разница между сборкой мусора Go (concurrent tri-color mark-and-sweep без компактификации) и HotSpot JVM G1/ZGC в контексте задержек (latency) приложения?", "options": ["Go GC полностью останавливает программу (STW) на весь цикл сборки, как старые Java GC", "Go GC работает конкурентно с mutator (write barrier + tri-color marking), с очень короткими STW-паузами (обычно <1мс) только для инициации и финализации цикла, но НЕ делает компактификацию (defragmentation) кучи — в отличие от G1/ZGC, где часть работы включает перемещение объектов для уменьшения фрагментации", "Go GC делает полную компактификацию памяти, как Java Serial GC", "GC в Go и Java идентичны по алгоритму и паузам"], "correct": 1, "explain": "Go использует некомпактирующий (non-moving) конкурентный tri-color mark-sweep сборщик: объекты помечаются (mark phase, конкурентно с работающей программой через write barrier), затем непомеченная память освобождается (sweep), но живые объекты НЕ перемещаются — куча может фрагментироваться, и это компенсируется allocator-ом (size classes, похожим на TCMalloc). STW-паузы у Go крайне короткие (обычно суб-миллисекундные) — только для координации начала цикла и остановки world на пометку корневых указателей стека. <b>В Java</b> современные сборщики (G1, а особенно ZGC/Shenandoah) — компактирующие и конкурентные: они физически перемещают живые объекты для устранения фрагментации, используя load barriers/colored pointers (ZGC) для конкурентного релоцирования почти без пауз. Итог: JVM тратит больше усилий на устранение фрагментации ценой сложности barrier-ов, Go жертвует компактностью кучи за более простую модель и стабильно короткие паузы независимо от размера кучи."}, {"q": "Как Go горутины (goroutines) отличаются от Java-тредов на уровне модели выполнения (M:N scheduling)?", "options": ["Горутина — это то же самое, что Java Thread, просто с другим названием", "Горутина — легковесная user-space единица выполнения (изначально ~2KB стек, растущий динамически), мультиплексируемая Go runtime scheduler-ом на ограниченный пул OS-тредов (M:N модель: множество goroutines на M OS threads через P processors); Java Thread (до virtual threads Java 21) — это 1:1 обёртка над OS-тредом с фиксированным стеком (обычно 512KB-1MB)", "Java-треды не имеют выделенного стека вообще", "Горутины планируются напрямую операционной системой, как обычные потоки"], "correct": 1, "explain": "Go runtime реализует M:N scheduling: G (goroutines) исполняются через M (OS threads) под управлением P (processors, обычно = GOMAXPROCS), позволяя запускать миллионы горутин с минимальным overhead благодаря маленькому начальному стеку (2KB, растёт/сжимается динамически через copying stack). Горутины кооперативно/превентивно (с Go 1.14+ через асинхронные сигналы) переключаются планировщиком уровня runtime, без syscall на каждое переключение. <b>В Java</b> традиционный Thread — это платформенный тред 1:1 с OS thread (через pthread на Linux), с фиксированным стеком (по умолчанию около 512KB-1MB, настраивается через -Xss), переключение контекста которого — дорогая kernel-level операция. Java 21 представил Virtual Threads (JEP 444, финализировано) — M:N модель, концептуально ОЧЕНЬ похожая на горутины (виртуальные треды мультиплексируются на пул carrier platform threads), что стало прямым признанием эффективности Go-подхода и попыткой Java догнать эту модель для высококонкурентных I/O-bound нагрузок."}, {"q": "Что произойдёт при попытке записать в закрытый (closed) канал в Go, и как это соотносится с семантикой BlockingQueue в Java?", "options": ["Запись в закрытый канал тихо игнорируется", "Запись в закрытый канал вызывает panic: send on closed channel; чтение из закрытого канала возвращает zero value и false немедленно, без блокировки", "Закрытый канал автоматически переоткрывается при следующей записи", "Только чтение из закрытого канала вызывает panic, запись безопасна"], "correct": 1, "explain": "close(ch) в Go сигнализирует, что больше данных не будет отправлено. Попытка <code>ch <- v</code> после close вызывает немедленную runtime panic — это неисправимая программная ошибка по дизайну (обычно означает баг в логике владения каналом, где несколько producer'ов не скоординированы). Чтение <code>v, ok := <-ch</code> из закрытого (и опустошённого) канала возвращает zero value типа и ok=false, без блокировки — что позволяет паттерн 'drain and detect close'. <b>В Java</b> BlockingQueue (например ArrayBlockingQueue) не имеет встроенного понятия 'закрытия' вообще — это библиотечная абстракция без языковой поддержки; типичный паттерн — использовать 'poison pill' (специальное sentinel-значение) или explicit флаг+volatile для сигнализации остановки consumer'ам, что структурно менее элегантно и более подвержено ошибкам, чем встроенный в язык close()+comma-ok идиома Go."}, {"q": "Как select в Go с несколькими готовыми каналами выбирает, какой case выполнить, и есть ли прямой аналог в Java concurrency API?", "options": ["select всегда выбирает первый по порядку case, как switch", "Если несколько case в select готовы одновременно, Go runtime выбирает один псевдослучайно (uniform pseudo-random) для избежания голодания (starvation) каналов, стоящих позже по тексту программы; прямого языкового аналога в Java нет — нужна ручная реализация через Selector (NIO) только для сетевых каналов, либо CompletableFuture.anyOf для async задач", "select выполняет ВСЕ готовые case параллельно", "select работает только с одним каналом за раз, множественные case запрещены"], "correct": 1, "explain": "select — уникальная языковая конструкция Go для мультиплексирования каналов. При множественных готовых case выбор псевдослучаен — намеренное дизайнерское решение, предотвращающее ситуацию, где case, написанный раньше по тексту, систематически 'съедает' все сообщения, оставляя другие каналы голодающими. default case делает select неблокирующим. <b>В Java</b> нет встроенной в язык конструкции, эквивалентной select по духу для произвольных blocking-примитивов; java.nio.channels.Selector даёт похожую мультиплексацию, но только для network/file channels на основе OS-level readiness (epoll/kqueue), а не для произвольных in-process очередей/каналов; для async-задач ближайший аналог — <code>CompletableFuture.anyOf()</code>, работающий на совершенно другой модели (completion callbacks, а не блокирующий выбор). Это показывает, что concurrency-примитивы двух языков спроектированы на разных базовых абстракциях: Go — CSP (Communicating Sequential Processes) каналы, Java — shared-memory с explicit locks/executors (плюс сейчас structured concurrency API)."}, {"q": "Почему передача больших структур по значению в Go может быть дороже, чем передача аналогичных объектов в Java, и когда стоит использовать указатель вместо значения?", "options": ["В Go передача структур по значению всегда быстрее, независимо от размера", "Передача структуры по значению в Go копирует ВСЕ байты структуры на стек при каждом вызове функции (стоимость растёт линейно с размером структуры); в Java передаётся только 8-байтовая (или 4 байта со сжатыми ссылками) ссылка независимо от размера объекта, потому что объекты Java всегда в куче — поэтому для больших структур (>несколько машинных слов) в Go обычно предпочтителен указатель, чтобы избежать копирования", "Размер структуры не влияет на производительность передачи параметров в обоих языках одинаково", "В Java передача объектов всегда медленнее из-за дополнительных проверок типов"], "correct": 1, "explain": "В Go структура passed-by-value физически копируется байт-в-байт при каждом вызове функции или присвоении — для структуры с 20 полями это заметно дороже, чем для структуры с 2 полями, и стоимость линейно растёт с размером (хотя компилятор может инлайнить мелкие функции, убирая часть overhead). Правило большого пальца в Go-сообществе: структуры больше ~3-4 машинных слов обычно передают по указателю, если не нужна явная семантика 'копии' (например, для иммутабельных value objects, где копирование — фича, а не бага). <b>В Java</b> объекты ВСЕГДА в куче, и переменная — это просто ссылка (машинное слово); передача 'большого' объекта в метод стоит ровно столько же, сколько передача 'маленького' — копируется только ссылка. Это фундаментальное архитектурное отличие: Go даёт контроль над copy-семантикой ценой необходимости думать о size/performance трейд-оффах, Java убирает этот выбор полностью за счёт всегда-referenced объектов."}, {"q": "Что произойдёт при попытке сравнить два слайса через ==?", "options": ["Скомпилируется и сравнит по содержимому", "Ошибка компиляции: slice can only be compared to nil (кроме nil-сравнения), в отличие от массивов фиксированного размера, которые comparable если элементы comparable", "Скомпилируется и всегда возвращает true", "Скомпилируется, сравнивая только длины"], "correct": 1, "explain": "Как и map, slice в Go — некомпарируемый тип оператором == (кроме сравнения с nil). Причина та же: глубокое сравнение было бы O(n) скрытой операцией, а сравнение internal pointer давало бы неинтуитивный результат. Для сравнения содержимого используется <code>slices.Equal()</code> (Go 1.21+) или ручной цикл. Важное отличие от массивов ([N]T) — массивы ФИКСИРОВАННОГО размера с comparable типом элементов ЯВЛЯЮТСЯ comparable через == (сравнение поэлементное, потому что размер известен на этапе компиляции и хранится как значение, не как указатель+метаданные). <b>В Java</b> массивы (T[]) сравниваются через == по identity (ссылке) — <code>arr1 == arr2</code> false даже для одинакового содержимого, если это разные объекты; для содержательного сравнения нужен <code>Arrays.equals()</code>. Коллекции (List, Map) переопределяют .equals() для структурного сравнения. То есть Java тоже не даёт 'бесплатного' глубокого сравнения через ==, просто предоставляет явные методы для этого на уровне библиотеки, а не встроенного оператора."}, {"q": "Как устроено внутреннее представление интерфейса в Go (itable/itab) и почему вызов метода через интерфейс имеет небольшой overhead по сравнению с прямым вызовом на конкретном типе?", "options": ["Вызов метода через интерфейс в Go абсолютно бесплатен, идентичен прямому вызову", "Интерфейсное значение хранит пару (itab-указатель, data-указатель); itab содержит таблицу указателей на методы конкретного типа для этого интерфейса — вызов метода требует dereference itab + indirect call через указатель функции (аналог vtable dispatch), что чуть дороже прямого статически известного вызова, который компилятор может инлайнить", "Go полностью убирает overhead виртуальных вызовов через compile-time monomorphization для всех интерфейсов", "itab пересчитывается при каждом вызове метода в runtime"], "correct": 1, "explain": "Интерфейсное значение — это двухсловная структура (type descriptor/itab, data pointer). itab для пары (конкретный тип, интерфейс) кэшируется runtime-ом и содержит указатели на реализации методов интерфейса для этого типа. Вызов через интерфейс — это indirect call (переход по указателю из таблицы, похоже на vtable dispatch в C++/Java), что предотвращает inlining и devirtualization компилятором в общем случае (хотя Go 1.21+ PGO — Profile-Guided Optimization — может частично devirtualize горячие пути). Прямой вызов метода на конкретном типе компилятор может инлайнить статически. <b>В Java</b> вызовы методов через интерфейс/базовый класс тоже принципиально virtual dispatch (через vtable/itable JVM), но HotSpot JIT активно применяет devirtualization и inline caching (особенно monomorphic call sites, где на практике встречается только один конкретный тип) в runtime на основе профилирования вызовов — то есть JIT-компилятор Java часто эффективнее убирает overhead виртуального вызова на горячих путях, чем AOT-компилятор Go, у которого меньше runtime-информации на момент компиляции (хотя PGO частично закрывает этот разрыв)."}, {"q": "Что происходит при делении на ноль для целых чисел в Go по сравнению с Java?", "options": ["Оба языка возвращают +Infinity, как для float", "Go: panic: integer divide by zero (runtime panic, немедленно останавливает горутину, если не recovered); Java: бросает ArithmeticException (checked как unchecked exception, можно поймать через catch)", "Go тихо возвращает 0 при делении на ноль для int", "Java возвращает null при делении int на ноль"], "correct": 1, "explain": "Оба языка справедливо считают целочисленное деление на ноль ошибочной операцией (в отличие от float64/double деления на 0.0, которое даёт +Inf/-Inf/NaN по стандарту IEEE 754 в обоих языках). Go: <code>a/b</code> при b=0 (целые) вызывает runtime panic, которую можно поймать через <code>defer recover()</code> в текущей горутине. Java: бросает <code>ArithmeticException: / by zero</code> — unchecked exception, перехватываемый обычным try-catch в любом месте call stack. Механизм восстановления отличается стилистически: Go использует defer+recover как явный, локальный к горутине механизм (recover должен быть в defer той же горутины, где произошла panic — панику из одной горутины НЕЛЬЗЯ поймать в другой), Java exceptions распространяются по call stack и могут быть пойманы в любом вызывающем методе того же потока, тоже не пересекая границы тредов автоматически."}, {"q": "Как обрабатываются ошибки идиоматически в Go (error как значение) в отличие от исключений в Java, и какова главная архитектурная причина этого различия?", "options": ["Go тоже использует исключения, просто с другим синтаксисом", "Go передаёт ошибки как обычные возвращаемые значения (error interface) — вызывающий код ОБЯЗАН явно проверить if err != nil на каждом уровне; Java использует exception-механизм с отдельным control flow (throw/catch), который может 'молча' пропустить несколько уровней стека, если не обработан явно", "Java не позволяет игнорировать exceptions, а Go принуждает к обработке через компилятор", "Оба языка используют одинаковый механизм panic/recover под разными именами"], "correct": 1, "explain": "Философское различие: Go рассматривает ошибки как часть обычного потока управления и данных — функция, которая может завершиться неудачно, возвращает (T, error), и caller явно, локально в каждой точке вызова решает: обработать, обернуть (fmt.Errorf с %w) и передать выше, или проигнорировать (возможность игнорировать — обоюдоострый меч: компилятор Go НЕ принуждает проверять err, что критикуется как источник тихих багов). Panic/recover в Go зарезервирован для действительно исключительных ситуаций (программных ошибок), а не обычных ошибок бизнес-логики. <b>В Java</b> checked exceptions (extends Exception) заставляют компилятор требовать explicit try-catch или throws в сигнатуре — это ближе к 'принуждению' чем Go error, но unchecked exceptions (RuntimeException) можно игнорировать так же свободно, как err в Go, и они прерывают нормальный поток управления, разворачивая стек до первого catch — то есть у Java есть частичное решение (checked exceptions), которого структурно нет в Go, но Go компенсирует явностью каждой точки проверки за счёт verbose кода (if err != nil повсюду)."}, {"q": "Что означает 'embedding' структур в Go (композиция через встраивание), и почему это НЕ является наследованием, в отличие от extends в Java?", "options": ["Embedding в Go идентичен наследованию классов в Java, просто с другим синтаксисом", "Embedding — это композиция с автоматическим forwarding методов встроенного типа (метод внешней структуры 'наследует' метод внутренней через promotion полей/методов), но НЕТ полиморфизма через embedding — метод встроенного типа, вызывающий другой метод того же типа, не может быть переопределён внешней структурой (нет virtual dispatch вверх), в отличие от Java, где переопределённый метод в подклассе вызывается даже если базовый класс вызывает его 'на себя'", "Java extends работает идентично Go embedding без каких-либо отличий в диспетчеризации методов", "Go embedding работает только для интерфейсов, не для структур"], "correct": 1, "explain": "<code>type Base struct{}; func (b Base) Hello() { fmt.Println('hi') }; type Derived struct{ Base }</code> — Derived автоматически получает метод Hello() через 'method promotion'. НО если Base.Hello() внутри себя вызывает другой метод Base (например b.Greet()), и Derived переопределяет Greet(), Base.Hello() ВСЕ РАВНО вызовет Base.Greet(), не Derived.Greet() — потому что рецепиент метода (b Base) статически известен как Base, там нет динамической диспетчеризации 'вверх' к наиболее производному типу. Это принципиальное отличие от classic OOP inheritance. <b>В Java</b> <code>class Base { void hello() { greet(); } void greet() {...} } class Derived extends Base { @Override void greet() {...} }</code> — вызов hello() унаследованного от Base метода, который внутри себя зовёт greet(), АКТИВИРУЕТ переопределённый Derived.greet() благодаря virtual method table и dynamic dispatch — это называется полиморфизм через наследование, и именно этого механизма Go принципиально не имеет через embedding, так как embedding — чистая композиция с syntactic sugar для forwarding, а не ierarchical type relationship с runtime polymorphism."}, {"q": "Каким образом Go предотвращает circular imports на уровне пакетов, и есть ли аналог такого ограничения в Java module system?", "options": ["Go разрешает циклические импорты без ограничений, как Java classpath", "Go компилятор явно запрещает циклические зависимости между пакетами (package A импортирует B, B импортирует A) — это ошибка компиляции; Java classes могут иметь циклические зависимости между классами свободно, а на уровне JPMS модулей (Java 9+) циклические зависимости МЕЖДУ модулями тоже запрещены (aналогично Go), хотя внутри одного модуля классы циклически зависеть могут свободно", "Java запрещает циклические зависимости на уровне отдельных классов", "Циклические зависимости запрещены только в go.mod, но не между пакетами внутри модуля"], "correct": 1, "explain": "Go имеет строгую двухуровневую модель: package — unit компиляции, зависимости между пакетами должны образовывать DAG (направленный ациклический граф) — циклический импорт package A → B → A это ошибка компиляции ('import cycle not allowed'), обнаруживаемая statically. Внутри одного пакета файлы могут свободно ссылаться друг на друга (там нет понятия цикличности, это единый compilation unit). <b>В Java</b> граница компиляции — отдельный класс (.java файл), и классы МОГУТ циклически зависеть друг от друга без проблем (ClassA использует ClassB, ClassB использует ClassA) — classloader резолвит это лениво. Но начиная с Java 9 (JPMS), появился уровень модулей (module-info.java), и ЗДЕСЬ Java вводит то же ограничение, что Go на пакеты: модули должны образовывать DAG, циклические module dependencies запрещены компилятором — то есть Java 'догнала' Go именно на уровне более крупной единицы модульности, оставив более гранулярный уровень классов свободным от такого ограничения."}, {"q": "Что произойдёт при выполнении следующего кода с defer в цикле?\n<pre>func process() {\n    for i := 0; i < 3; i++ {\n        defer fmt.Println(i)\n    }\n    fmt.Println(\"done\")\n}</pre>\nКакой будет порядок вывода, и как defer в цикле влияет на использование памяти?", "options": ["done, 0, 1, 2 — defer выполняются в порядке объявления после return", "done, 2, 1, 0 — defer выполняются в LIFO порядке (последний defer — первый выполненный), все 3 defer накапливаются в стеке до возврата из функции, что может быть проблемой памяти при defer в цикле с большим числом итераций", "0, 1, 2, done — defer выполняются немедленно в порядке объявления", "Ошибка компиляции: defer запрещён внутри for"], "correct": 1, "explain": "defer регистрирует вызов, который выполнится при выходе из функции (не из блока/цикла!), и все зарегистрированные defer выполняются в порядке LIFO (стек) — последний зарегистрированный выполняется первым. В цикле каждая итерация регистрирует НОВЫЙ defer с захваченным на тот момент значением i (Go вычисляет аргументы defer немедленно в момент вызова defer, а не в момент выполнения) — поэтому получаем 0,1,2 зарегистрированных, выполнятся в порядке 2,1,0, ПОСЛЕ печати 'done' (так как defer срабатывают при выходе из всей функции process, а не из тела for). Известная практическая проблема: defer в цикле с большим числом итераций (например, closing множества файлов в долгом loop) накапливает все defer-вызовы до конца функции, а не освобождает ресурсы по ходу — источник утечек файловых дескрипторов, если функция долго не завершается. <b>В Java</b> прямого аналога defer нет; ближайший — try-finally или try-with-resources, которые выполняются немедленно при выходе из СВОЕГО блока (не из всей функции), поэтому 'defer в цикле' проблема Go структурно невозможна в Java — resource cleanup там локален к блоку по конструкции языка."}, {"q": "Почему strings.Builder в Go эффективнее конкатенации через +, и как это соотносится с internal buffer growth strategy в Java StringBuilder?", "options": ["strings.Builder не имеет отношения к производительности, просто другой синтаксис", "strings.Builder хранит внутренний []byte буфер, который растёт по амортизированной стратегии (обычно удвоение capacity при переполнении, аналогично growslice в Go runtime), избегая множественных аллокаций при повторных WriteString; финальный String() делает unsafe-конвертацию без копирования данных", "strings.Builder всегда аллоцирует ровно один раз независимо от объёма данных", "strings.Builder идентичен bytes.Buffer без каких-либо отличий"], "correct": 1, "explain": "strings.Builder использует внутренний []byte, растущий похожим на append() алгоритмом (грубо говоря, удвоение при нехватке capacity, с более консервативным ростом для больших размеров) — амортизированная O(1) стоимость на WriteString в среднем, вместо O(n) копирования всей строки на каждой конкатенации через +=. Финальный метод String() использует unsafe pointer conversion ([]byte → string) БЕЗ копирования данных, что безопасно только потому, что Builder гарантирует эксклюзивное владение буфером и запрещает дальнейшую модификацию после чтения (проверка через reflect на копирование Builder). <b>В Java</b> StringBuilder внутри использует char[] (или byte[] с Java 9+ Compact Strings для Latin1-совместимых строк), также растущий по стратегии grow (обычно newCapacity = oldCapacity*2+2). Java StringBuilder.toString() ВСЕГДА копирует данные в новый массив для создания immutable String (нельзя избежать копирования, потому что String должен оставаться immutable, а внутренний массив Builder продолжает жить и может быть модифицирован дальше) — то есть Go выигрывает здесь один явный memcpy благодаря более строгим правилам владения (ownership) буфера Builder-а после финализации."}, {"q": "В чём заключается разница между value receiver и pointer receiver у методов в Go, и как это влияет на то, какие методы 'входят' в method set типа при удовлетворении интерфейса?", "options": ["Value receiver и pointer receiver дают идентичный method set для типа T и *T", "Метод с value receiver (func (t T) M()) входит в method set обоих T и *T; метод с pointer receiver (func (t *T) M()) входит ТОЛЬКО в method set *T — поэтому переменная типа T (не адресуемая, например возвращённая из map) не удовлетворяет интерфейсу, если интерфейс требует метод с pointer receiver", "Pointer receiver методы недоступны через переменные типа T в принципе, даже адресуемые", "Value receiver методы работают только для встроенных типов"], "correct": 1, "explain": "Method set для типа T включает все методы с value receiver. Method set для *T включает методы И с value, И с pointer receiver (компилятор автоматически берёт адрес при вызове pointer-receiver метода на адресуемой переменной T). Но если у вас интерфейсное значение типа T (не *T), и метод объявлен с pointer receiver, T НЕ удовлетворяет интерфейс — компилятор явно откажется присвоить, потому что нет гарантии адресуемости T в общем случае (например, T, полученный как map value, неадресуем — &m[k] невалиден, значит pointer receiver метод на нём вызвать невозможно). Частая ошибка: <code>var i MyInterface = MyStruct{}</code> не компилируется, если хоть один метод MyInterface реализован через pointer receiver у MyStruct. <b>В Java</b> нет аналогичного разделения — методы объекта всегда вызываются через ссылку (которая по сути 'pointer' в терминологии Go), поэтому концептуального различия value/pointer receiver и связанных правил method set в Java не существует вообще — все методы 'ведут себя как pointer receiver' с точки зрения этой Go-специфичной проблемы."}, {"q": "Что произойдёт с массивом (не слайсом) фиксированного размера в Go при передаче в функцию?\n<pre>func modify(a [3]int) { a[0] = 100 }\nfunc main() {\n    arr := [3]int{1, 2, 3}\n    modify(arr)\n    fmt.Println(arr)\n}</pre>", "options": ["[100 2 3] — массивы передаются по ссылке, как слайсы", "[1 2 3] — массив [3]int это value type, копируется целиком при передаче, изменения внутри функции не видны снаружи", "Ошибка компиляции — массивы нельзя передавать в функции по значению", "[100 2 3] — потому что массив это alias для слайса"], "correct": 1, "explain": "В Go, в отличие от слайсов ({ptr,len,cap} дескриптор), массив [N]T — это ПОЛНОЦЕННЫЙ value type фиксированного размера, часть которого является типовой информацией (длина — часть типа: [3]int и [4]int это РАЗНЫЕ несовместимые типы). Передача массива в функцию копирует ВСЕ N элементов целиком — modify(arr) получает полную независимую копию, изменения внутри неё не влияют на arr в main. Именно поэтому в реальном Go-коде массивы используются гораздо реже слайсов — слайс сверху массива даёт reference-like поведение через shared underlying array, тогда как чистый массив — value semantics в чистом виде, похожий на C-массив или структуру. <b>В Java</b> НЕТ аналога value-type массива — любой массив (int[], Object[]) это объект в куче, всегда передаваемый по ссылке; 'скопировать' массив требует явного Arrays.copyOf/clone. Поэтому Go array — это уникальная для Java-программиста конструкция: 'массив, который ведёт себя как примитивное значение', чего в Java просто нет вообще ни для одной встроенной коллекции."}, {"q": "Как работает append при превышении capacity слайса, и какова growth factor стратегия в современных версиях Go (1.18+)?", "options": ["Go всегда увеличивает capacity ровно на 1 элемент при каждом append сверх cap", "При превышении cap, Go аллоцирует новый массив большего размера (примерно ×2 для маленьких слайсов, с постепенным замедлением роста до примерно ×1.25 для больших слайсов после порога, плюс округление к удобным size classes аллокатора) и копирует старые данные — старый underlying array становится недостижим (эффективно 'отвязывается' от нового слайса)", "Capacity слайса никогда не меняется, append паникует при переполнении", "Go всегда аллоцирует ровно необходимый размер без запаса"], "correct": 1, "explain": "growslice в runtime Go использует адаптивную стратегию: для маленьких слайсов (обычно <256 элементов) capacity примерно удваивается, что даёт amortized O(1) append в среднем; для больших слайсов рост замедляется (~1.25x) чтобы не тратить слишком много памяти зря, плюс финальный размер округляется вверх до ближайшего 'size class' allocator-а (memory classes аллокатора Go, похожие на TCMalloc size classes) для эффективности переиспользования памяти. После реаллокации старый массив, если на него больше нет ссылок, становится мусором для GC. Критично понимать: append МОЖЕТ вернуть слайс с другим underlying array, поэтому <code>s = append(s, x)</code> обязательно переприсваивать результат — старая переменная s (без переприсваивания) не увидит новых данных после реаллокации. <b>В Java</b> ArrayList использует похожую по духу, но более простую стратегию — рост capacity в 1.5x (grow = oldCapacity + (oldCapacity >> 1)) при переполнении, с System.arraycopy для переноса данных в новый внутренний массив — концептуально идентичная проблема amortized growth, разные конкретные коэффициенты, и в Java эта механика полностью инкапсулирована (внешний API никогда не 'путает' старый и новый backing array, потому что ArrayList — это объект-обёртка, а не value-дескриптор, как слайс)."}, {"q": "Что означает 'unsafe.Pointer' в Go, и есть ли философский аналог в подходе Java к небезопасным операциям с памятью?", "options": ["unsafe.Pointer запрещён компилятором и существует только в документации", "unsafe.Pointer позволяет обходить систему типов Go для низкоуровневых операций (конвертация между несовместимыми типами указателей, арифметика через uintptr) — явно обозначенный 'escape hatch' из безопасной модели памяти, требующий явного импорта пакета unsafe и визуально заметный в коде (маркер риска); Java исторически имел sun.misc.Unsafe для похожих целей, но эта API официально deprecated и заблокирована в современных версиях (в пользу VarHandle/Foreign Function & Memory API из Project Panama)", "unsafe.Pointer работает идентично обычному *T без каких-либо отличий в гарантиях", "Java никогда не имела способов работы с сырой памятью в принципе"], "correct": 1, "explain": "unsafe.Pointer в Go — это специальный тип, который может конвертироваться в/из любого указателя и в uintptr (для арифметики), явно нарушая гарантии типовой безопасности. Используется для low-level взаимодействия с syscalls, cgo, реализации сериализации без копирования и т.д. Название пакета 'unsafe' и необходимость явного импорта — намеренный design choice, делающий рискованный код легко находимым через grep. <b>В Java</b> исторически sun.misc.Unsafe (недокументированный внутренний API) давал похожие возможности (direct memory access, CAS операции, allocateInstance без конструктора) и активно использовался высокопроизводительными библиотеками (Netty, Kafka clients, Chronicle) — но начиная с Java 9 модульная система начала ограничивать доступ, а Java 17+ показывает предупреждения, и итоговая замена — Foreign Function & Memory API (JEP 454, финализировано в Java 22) и VarHandle предоставляют более безопасные, официально поддерживаемые способы работы с off-heap памятью и atomic-операциями. Оба языка признают необходимость escape hatch из safety-модели, но Go встроил это как явную часть языка с первого дня, а Java эволюционировала от недокументированного хака к официальному, тщательно спроектированному API."}, {"q": "Почему в Go нет исключений (checked/unchecked) в стиле Java, и как panic/recover принципиально отличается от try/catch по предполагаемому use case?", "options": ["panic/recover это просто другое название для try/catch с идентичной семантикой использования", "panic/recover предназначены для действительно исключительных, непредвиденных программных ошибок (нарушение invariant, index out of range, nil dereference) и ОБЫЧНО не используются для штатной обработки ожидаемых ошибок бизнес-логики (для этого — error return value); try/catch в Java используется как основной механизм для ОБОИХ случаев — и ожидаемых ошибок (checked exceptions вроде IOException), и непредвиденных (RuntimeException)", "Go полностью не имеет никакого механизма обработки непредвиденных ошибок", "panic автоматически конвертируется в error при пересечении границы пакета"], "correct": 1, "explain": "Идиоматический Go код резервирует panic для situations, которые указывают на баг в программе или truly unrecoverable state (например, нарушение инварианта, который 'не должен' происходить при правильной логике) — обычные, ожидаемые сбои (файл не найден, невалидный ввод, сетевая ошибка) моделируются через явный error return, который caller обязан явно проверить в каждой точке. Go community считает 'anti-pattern' использовать panic/recover как замену полноценного error handling (хотя технически возможно, некоторые библиотеки так делают внутри себя и recover-ят на границе public API). <b>В Java</b> exception hierarchy специально разделяет checked exceptions (ожидаемые, восстановимые ошибки, требующие explicit handling по контракту метода — IOException, SQLException) и unchecked/RuntimeException (программные ошибки, баги — NullPointerException, IllegalArgumentException) — то есть Java, в отличие от общего впечатления, тоже концептуально различает эти два случая, просто оба идут через единый throw/catch механизм, а не два разных (error value vs panic), как в Go."}, {"q": "Как работает GOMAXPROCS и его связь с планированием горутин на многоядерных системах, есть ли аналог управления параллелизмом в стандартной библиотеке Java?", "options": ["GOMAXPROCS управляет только количеством горутин, которые можно создать всего", "GOMAXPROCS задаёт количество OS-тредов (P — processors в go runtime), которые могут одновременно выполнять Go-код (по умолчанию = число логических CPU) — это верхняя граница ПАРАЛЛЕЛИЗМА (не concurrency: горутин может быть миллионы, физически исполняться одновременно может максимум GOMAXPROCS штук); в Java прямого аналога на уровне языка нет, но ForkJoinPool.commonPool() по умолчанию использует Runtime.availableProcessors()-1 воркеров, а virtual threads (Java 21+) используют настраиваемый carrier thread pool похожей природы", "GOMAXPROCS должен всегда равняться числу горутин в программе", "В Java поток параллелизма полностью не настраивается разработчиком"], "correct": 1, "explain": "GOMAXPROCS определяет размер пула P (processors — логическая абстракция runtime Go, не физическое ядро напрямую, но по умолчанию равна числу логических CPU) — именно столько горутин могут физически исполняться конкурентно в один момент времени на разных OS threads; остальные готовые к выполнению горутины ждут в очереди runtime scheduler-а. Это разделение concurrency (много горутин логически 'в процессе') и parallelism (сколько из них реально исполняется одновременно) — фундаментальная идея, популяризированная Роб Пайком. <b>В Java</b> нет единого языкового параметра, аналогичного GOMAXPROCS, потому что традиционные Thread — это честные 1:1 OS threads, и 'параллелизм' там просто равен числу активных тредов, ограниченному самой OS/JVM, а не runtime-планировщиком языка. Ближайшие аналоги на библиотечном уровне: ForkJoinPool (default размер = availableProcessors()-1, используется Stream.parallel()) и, с Java 21, виртуальные треды планируются на pool carrier-платформенных тредов (по умолчанию размер = availableProcessors(), настраиваемо через system property) — концептуально похожая на GOMAXPROCS идея M:N диспетчеризации, но появившаяся в Java десятилетия позже и не как единый языковый примитив, а как библиотечная настройка JEP."}, {"q": "Что произойдёт при выполнении следующего кода с интерфейсами и map, использующим structs как значения (не указатели)?\n<pre>type Counter struct{ n int }\nm := map[string]Counter{\"a\": {n: 1}}\nm[\"a\"].n++ </pre>", "options": ["Скомпилируется и увеличит n до 2", "Ошибка компиляции: cannot assign to struct field m[\"a\"].n in map — потому что map-значения неадресуемы, а n++ требует адресуемости для составной операции", "Скомпилируется, но n останется 1", "Panic в runtime при попытке инкремента"], "correct": 1, "explain": "Продолжая тему неадресуемости map values (см. вопрос про &m[key]): любая операция, требующая адреса для составного присвоения (++, +=, или прямое присвоение полю структуры m[k].field = x), запрещена компилятором на этапе компиляции для map с не-указательным типом значения. Единственный способ изменить структуру-значение в map — забрать всю структуру, изменить локальную копию, положить обратно целиком: <code>c := m[\"a\"]; c.n++; m[\"a\"] = c</code>, либо изначально хранить <code>map[string]*Counter</code> с указателями. Это частая причина ошибок компиляции у новичков, впервые пробующих мутировать вложенные структуры в map. <b>В Java</b> HashMap<String, Counter> с Counter как mutable объект работает без проблем — <code>map.get(\"a\").n++</code> компилируется и работает, потому что get() возвращает ссылку на реальный объект в куче, и инкремент поля через эту ссылку сразу виден — никакой 'неадресуемости' в Java не существует, потому что все объекты в Java уже 'адресуемы' по своей природе (ссылочные типы)."}, {"q": "Как компилятор Go обрабатывает named return values в контексте defer, и какую 'магию' это позволяет реализовать для обработки ошибок?", "options": ["Named return values не имеют отношения к defer вообще", "Named return values — это предобъявленные переменные результата функции; defer-функция, объявленная ПОСЛЕ них, может модифицировать их значение ДО фактического возврата из функции (потому что defer выполняется после вычисления return выражения, но до реального выхода) — классический паттерн: recover() в defer устанавливает named error return, конвертируя panic в обычную ошибку для вызывающего кода", "defer не может обращаться к return values функции ни при каких обстоятельствах", "Named returns автоматически инициализируются как nil независимо от типа"], "correct": 1, "explain": "<code>func f() (result int, err error) { defer func() { if r := recover(); r != nil { err = fmt.Errorf(\"recovered: %v\", r) } }(); ... }</code> — named return values result и err это фактически объявленные в начале функции переменные (аналог var result int; var err error). Когда происходит return (или panic), Go присваивает значения этим переменным ДО выполнения зарегистрированных defer, а сами defer выполняются, имея доступ к этим переменным по замыканию, и МОГУТ их изменить — итоговое значение, видимое caller-у, будет тем, что установлено ПОСЛЕ выполнения всех defer. Это единственный идиоматический способ 'перехватить' panic и превратить в обычный err на границе публичной функции. <b>В Java</b> нет прямого аналога named return + defer для этой цели, но семантически похожий паттерн — try { ... } catch (RuntimeException e) { throw new CheckedWrapperException(e); } finally { ... } — finally блок в Java НЕ может изменить уже подготовленное к throw исключение или return значение так же элегантно (хотя finally может 'съесть' исключение через свой собственный return/throw, что считается anti-pattern и предупреждается многими линтерами), то есть Go даёт официальный, идиоматический механизм для того, что в Java выглядело бы как code smell."}, {"q": "В чём разница между глубиной копирования (deep vs shallow) при передаче слайса байт []byte в функцию, которая делает string(b) конвертацию, и почему такая конвертация 'дорогая' по умолчанию?", "options": ["string(b) никогда не копирует данные, всегда работает через shared memory с исходным []byte", "string(b) по умолчанию ДЕЛАЕТ полную копию байт в новый неизменяемый массив — потому что string в Go immutable, а []byte mutable; если после конвертации исходный []byte будет изменён, string не должен 'увидеть' это изменение — компилятор Go в некоторых узких случаях (например, map[string(b)] lookup без сохранения строки) оптимизирует и избегает копирования, но это не общее правило", "Конвертация string(b) запрещена компилятором без явного unsafe вызова", "byte и string это один и тот же тип под разными именами в Go"], "correct": 1, "explain": "string(b) где b — []byte, по спецификации Go создаёт НОВУЮ строку с собственной копией байт. Причина фундаментальна для безопасности типовой системы: string immutable по контракту (никто не должен суметь изменить string после создания), а []byte mutable — если бы конвертация делилась памятью, изменение исходного слайса 'тихо' поменяло бы 'неизменяемую' строку, нарушая гарантии языка. Компилятор Go умеет применять narrow escape-analysis оптимизации в конкретных паттернах (например, temporary string(b) как map-ключ в лукапе без сохранения переменной) чтобы избежать копирования, но это оптимизация компилятора, не гарантия языка — нельзя рассчитывать на неё в общем случае. <b>В Java</b> String тоже immutable, но конструктор <code>new String(byteArray)</code> ТАКЖЕ всегда копирует байты (по тем же причинам иммутабельности) — конвертация byte[]→String в обоих языках требует копирования по одинаковой фундаментальной причине (защита immutability от внешней мутации через оригинальный mutable буфер), различие только в деталях того, где компилятор/JIT может 'срезать углы' оптимизациями."}, {"q": "Что произойдёт при попытке использовать nil-канал (не закрытый, а именно nil, необъявленный через make) в select-конструкции?", "options": ["Panic: nil channel select", "Отправка/чтение из nil-канала блокируется НАВСЕГДА (deadlock), но внутри select это не panic, а просто этот case никогда не сработает — полезный паттерн для 'выключения' конкретного case динамически (например, disable timeout после первого срабатывания)", "nil-канал в select автоматически пропускается компилятором как ошибка", "Чтение из nil-канала сразу возвращает zero value без блокировки"], "correct": 1, "explain": "Операции send/receive на nil-канале (canal, объявленный как var ch chan int без make) блокируются навечно — это фундаментальное свойство, используемое как фича: если внутри select один из case использует nil-канал, этот case ПРАКТИЧЕСКИ никогда не будет выбран (потому что операция на нём никогда не готова), что даёт способ 'обнулить' конкретную ветку select динамически в runtime (классический паттерн — таймер, который после первого срабатывания устанавливается в nil, чтобы select больше не реагировал на него, не удаляя код case). Вне select, вызов на nil-канале без какого-либо другого готового case в том же select просто заблокирует горутину навсегда (deadlock detection Go runtime поймает это только если ВСЕ горутины заблокированы одновременно — 'all goroutines are asleep - deadlock'). <b>В Java</b> нет прямого аналога 'nil channel' с такой семантикой в стандартной библиотеке — BlockingQueue/CompletableFuture не имеют состояния 'null-объект блокируется навечно' как встроенное языковое свойство, подобные паттерны 'отключения' в Java реализуются через explicit флаги или установку таймаута в Long.MAX_VALUE, что менее элегантно интегрировано с языком."}, {"q": "Каким образом Go реализует generics (начиная с версии 1.18) на уровне компиляции, и в чём принципиальное отличие от type erasure в Java generics?", "options": ["Go generics работают идентично Java — через erasure, вся типовая информация теряется в runtime", "Go компилятор для generics использует гибридный подход GCShape stenciling (частичная монomorphизация: конкретные инстанциации генерируются для типов с разным 'shape' — например, все указательные типы делят один код, а разные примитивы могут получать отдельные версии) — типовая информация СОХРАНЯЕТСЯ в runtime через dictionary passing для интерфейсных ограничений; Java использует полное type erasure — List<String> и List<Integer> компилируются в идентичный байткод, вся типовая информация обобщённого параметра стирается после компиляции (кроме bridge methods и generic signature метаданных для reflection)", "Java generics сохраняют полную типовую информацию в runtime без erasure", "Go полностью не поддерживает generics, добавлена только видимость через interface{}"], "correct": 1, "explain": "Go generics (введены в Go 1.18) используют технику 'GCShape stenciling with dictionaries': компилятор группирует типы по 'форме' (shape) — например, все типы-указатели имеют одинаковый shape и могут делить один скомпилированный код функции, передавая dictionary (таблицу метода/размера) в runtime для type-specific операций (как вызов метода через constraint interface); для разных примитивных shape (int32 vs int64 vs string) могут генерироваться отдельные версии кода. Это компромисс между полной монoморфизацией (как в Rust/C++ templates — быстро, но код bloat) и чистым erasure. <b>В Java</b> generics используют ПОЛНОЕ type erasure: <code>List<String></code> в runtime это просто List, вся параметризация типа существует только на этапе компиляции для проверки типов, а после компиляции стирается (кроме сохранённой generic signature в class-файле для reflection API и bridge methods для корректного переопределения при erasure). Следствие: в Java невозможно создать <code>new T()</code> или массив <code>new T[]</code> внутри generic метода без reflection трюков (Class<T> passing), тогда как в Go generics, благодаря сохранённой в runtime dictionary, некоторые операции с типом-параметром возможны более прямолинейно."}, {"q": "Почему goroutine leak (горутина, которая никогда не завершается) — частая проблема в Go-коде, и какой Java-аналог этой проблемы существует в контексте thread pool management?", "options": ["Goroutine leak невозможен в принципе, GC автоматически завершает 'висящие' горутины", "Горутина, блокированная навечно на канале без close/timeout (например, ждущая отправки в канал, который никто не читает, потому что consumer завершился) не будет собрана GC, потому что она активна (просто заблокирована) — GC собирает недостижимую ПАМЯТЬ, но не 'зависшие' горутины как таковые, что приводит к постепенному накоплению; аналог в Java — thread leak при неправильном использовании ExecutorService (забытый shutdown(), задачи, блокирующиеся навечно в пуле с ограниченным размером, истощающие пул)", "Утечки горутин автоматически логируются runtime и завершаются через 30 секунд", "Горутины автоматически завершаются, если родительская горутина завершилась"], "correct": 1, "explain": "Горутина — это независимый поток управления без понятия 'родитель-потомок' в runtime Go (main горутина завершение немедленно останавливает всю программу, включая незавершённые горутины, но обычная горутина не привязана к жизни горутины, её создавшей). Если горутина блокируется на канале навечно (send без receiver, receive без sender, mutex.Lock() без unlock где-то), она остаётся 'живой' с точки зрения runtime scheduler-а (occupies стек, отслеживается GC как root для reachability, потому что стек содержит указатели), просто не прогрессирует — классический goroutine leak, обнаруживаемый через growing goroutine count (runtime.NumGoroutine()) или профилировщик (pprof goroutine profile). GC НЕ 'убивает' зависшие горутины — у Go нет механизма force-kill горутины извне (в отличие от deprecated Thread.stop() в Java). <b>В Java</b> похожая проблема — task, отправленная в ExecutorService, которая блокируется навечно (например, дедлок или бесконечный вызов blocking I/O без таймаута) занимает поток из пула навсегда, и если пул с фиксированным размером, это постепенно истощает доступные потоки (thread starvation) — концептуально идентичная по природе проблема 'ресурс занят, но не работает и не освобождается', просто на уровне OS-threads в Java и user-space горутин в Go."}, {"q": "Что выведет следующий код, демонстрирующий разницу append на слайсе, полученном из литерала массива через полный срез?\n<pre>arr := [5]int{1, 2, 3, 4, 5}\ns1 := arr[0:2]\ns2 := arr[0:2:2]\ns1 = append(s1, 99)\ns2 = append(s2, 88)\nfmt.Println(arr)</pre>\n(разница между обычным срезом и three-index slice с явным ограничением capacity)", "options": ["[1 2 3 4 5] для обоих случаев, append никогда не влияет на исходный массив", "[99 2 99 4 5] — s1 без явного cap имеет cap=5 (до конца массива), поэтому append(s1,99) пишет в arr[2], перезаписывая 3; s2 с three-index slice arr[0:2:2] имеет cap=2, поэтому append(s2,88) ВЫНУЖДЕН реаллоцировать новый массив, не трогая arr — итог: arr[2] перезаписан первым append, но НЕ вторым", "[1 2 99 4 5] — только s1 меняет массив, порядок операций не важен", "Оба append вызывают панику из-за конфликта cap"], "correct": 1, "explain": "Ключевой концепт: full slice expression <code>arr[low:high:max]</code> (three-index slicing) позволяет ЯВНО ограничить cap результирующего слайса, независимо от реального размера underlying array. s1 := arr[0:2] (два индекса) даёт len=2, cap=5 (от индекса 0 до конца массива arr) — append(s1, 99) находит место (index 2, свободное по cap), пишет прямо в arr, arr становится [1 2 99 4 5]. s2 := arr[0:2:2] (three-index) даёт len=2, cap=2 (ограничено явно) — append(s2, 88) видит, что cap исчерпан (len==cap==2), поэтому Go ОБЯЗАН аллоцировать НОВЫЙ underlying array для s2, не трогая arr вообще. Итоговый arr после обеих операций: [1 2 99 4 5] (изменён только первым append). Three-index slicing — важная техника для 'защиты' от нежелательных side-effects через shared cap, вынуждающая любой последующий append сразу копировать данные. <b>В Java</b> такой техники не существует, потому что массивы фиксированного размера не имеют понятия 'запаса capacity' сверх длины вообще — 'защита' от подобных side-effects в Java достигается либо иммутабельностью через копирование (Arrays.copyOfRange), либо просто отсутствием этой проблемы в принципе, так как коллекции (ArrayList) не имеют 'view с общим backing array и ограниченным cap' семантики, доступной программисту напрямую."}, {"q": "Как устроена внутренняя структура string в Go на уровне памяти (StringHeader), и почему конвертация []byte(s) для non-mutating чтения строки считается anti-pattern по производительности?", "options": ["StringHeader — это структура {Data uintptr, Len int} (просто указатель+длина, БЕЗ capacity, в отличие от SliceHeader {Data,Len,Cap}); конвертация string→[]byte ВСЕГДА копирует данные (по причине immutability, разобранной ранее), поэтому вызов []byte(s) только для передачи в функцию, ожидающую []byte для READ-ONLY операции (без намерения мутировать), тратит память и CPU на ненужное копирование — многие стандартные API (например, io.Writer.Write([]byte)) вынуждают к этому из-за отсутствия read-only slice view в Go до появления unsafe-трюков или предложений типа iter.Seq[byte]", "StringHeader идентичен SliceHeader по всем полям", "Конвертация []byte(s) никогда не копирует данные благодаря shared memory", "Строки в Go хранятся как linked list рун"], "correct": 1, "explain": "string в Go представлен runtime-структурой StringHeader{Data *byte, Len int} — заметьте: НЕТ поля Cap, потому что строка неизменяема и никогда не 'растёт' — ей не нужен запас capacity, в отличие от SliceHeader{Data,Len,Cap}, где Cap необходим для amortized append. Именно отсутствие Cap — причина, почему string() и []byte() конвертации в обе стороны требуют полного копирования: у string просто нет 'лишнего места' для того, чтобы слайс мог безопасно писать поверх её данных, и наоборот, у slice есть mutable гарантии, несовместимые с sharing памяти с immutable string. Известный performance anti-pattern — многократные конвертации туда-обратно в hot path (например, []byte(s) только чтобы прочитать байты для сравнения) — опытные Go-разработчики используют unsafe трюки (unsafe.StringData/unsafe.String, добавленные в Go 1.20 как официальный безопасный способ) когда позволяет контракт immutability, чтобы избежать копирования при READ-only доступе. <b>В Java</b> String хранит internal char[] (или byte[] с compact strings Java 9+) как private final поле, и НЕ существует встроенного способа получить 'read-only view' этого массива без копирования через публичный API (getBytes() всегда копирует) — Java предпочитает безопасность (никогда не 'светить' внутренний массив наружу, чтобы гарантировать immutability) даже ценой лишних копирований, похожая философия к Go, просто без эквивалента unsafe.String для перформанс-критичных случаев в стандартной библиотеке."}];
+</script>
+<script>
+(function() {
+  "use strict";
+
+  const TIME_PER_Q = 60; // seconds
+  const CIRC = 125.6; // 2*pi*20 approx circumference for r=20
+
+  // Shuffle questions order but keep option order/correct index mapping stable per question
+  const questions = QUIZ_DATA.slice();
+
+  let current = 0;
+  let score = 0;
+  let timerId = null;
+  let timeLeft = TIME_PER_Q;
+  let answered = false;
+  const userAnswers = []; // { qIndex, chosen (or null if timeout), correct(bool) }
+
+  const startScreen = document.getElementById('start-screen');
+  const quizScreen = document.getElementById('quiz-screen');
+  const resultScreen = document.getElementById('result-screen');
+  const startBtn = document.getElementById('start-btn');
+  const nextBtn = document.getElementById('next-btn');
+  const restartBtn = document.getElementById('restart-btn');
+  const reviewBtn = document.getElementById('review-btn');
+
+  const progressLabel = document.getElementById('progress-label');
+  const scoreLabel = document.getElementById('score-label');
+  const progressFill = document.getElementById('progress-fill');
+  const timerNum = document.getElementById('timer-num');
+  const timerFg = document.getElementById('timer-fg');
+  const qIndexTag = document.getElementById('q-index-tag');
+  const qText = document.getElementById('q-text');
+  const optionsContainer = document.getElementById('options-container');
+  const explainBox = document.getElementById('explain-box');
+  const explainTitle = document.getElementById('explain-title');
+  const explainText = document.getElementById('explain-text');
+
+  const resultScore = document.getElementById('result-score');
+  const resultGrade = document.getElementById('result-grade');
+  const resultSub = document.getElementById('result-sub');
+  const reviewList = document.getElementById('review-list');
+
+  function letterFor(i) { return ["A", "B", "C", "D", "E", "F"][i] || String(i+1); }
+
+  function startQuiz() {
+    current = 0;
+    score = 0;
+    userAnswers.length = 0;
+    startScreen.style.display = 'none';
+    resultScreen.style.display = 'none';
+    quizScreen.style.display = 'block';
+    renderQuestion();
+  }
+
+  function renderQuestion() {
+    answered = false;
+    const q = questions[current];
+    progressLabel.textContent = `Вопрос ${current + 1} / ${questions.length}`;
+    scoreLabel.textContent = `Верно: ${score}`;
+    progressFill.style.width = `${(current / questions.length) * 100}%`;
+    qIndexTag.textContent = `Вопрос ${current + 1}/${questions.length}`;
+
+    qText.innerHTML = q.q;
+
+    optionsContainer.innerHTML = '';
+    q.options.forEach((opt, i) => {
+      const div = document.createElement('div');
+      div.className = 'option';
+      div.innerHTML = `<span class="letter">${letterFor(i)}</span><span>${opt}</span>`;
+      div.addEventListener('click', () => selectAnswer(i));
+      optionsContainer.appendChild(div);
+    });
+
+    explainBox.classList.remove('show');
+    explainBox.style.display = 'none';
+    nextBtn.style.display = 'none';
+
+    resetTimer();
+    startTimer();
+  }
+
+  function resetTimer() {
+    timeLeft = TIME_PER_Q;
+    timerNum.textContent = timeLeft;
+    timerFg.style.stroke = 'var(--good)';
+    timerFg.style.strokeDashoffset = '0';
+  }
+
+  function startTimer() {
+    if (timerId) clearInterval(timerId);
+    timerId = setInterval(() => {
+      timeLeft -= 1;
+      timerNum.textContent = Math.max(timeLeft, 0);
+      const ratio = Math.max(timeLeft, 0) / TIME_PER_Q;
+      timerFg.style.strokeDashoffset = String(CIRC * (1 - ratio));
+      if (timeLeft <= 15) {
+        timerFg.style.stroke = 'var(--bad)';
+      } else if (timeLeft <= 30) {
+        timerFg.style.stroke = 'var(--warn)';
+      }
+      if (timeLeft <= 0) {
+        clearInterval(timerId);
+        if (!answered) {
+          selectAnswer(null, true);
+        }
+      }
+    }, 1000);
+  }
+
+  function selectAnswer(choiceIndex, timedOut) {
+    if (answered) return;
+    answered = true;
+    if (timerId) clearInterval(timerId);
+
+    const q = questions[current];
+    const opts = optionsContainer.querySelectorAll('.option');
+    const isCorrect = (!timedOut && choiceIndex === q.correct);
+
+    opts.forEach((el, i) => {
+      el.classList.add('disabled');
+      if (i === q.correct) {
+        el.classList.add('correct');
+      } else if (!timedOut && i === choiceIndex) {
+        el.classList.add('incorrect');
+      } else {
+        el.classList.add('dim');
+      }
+    });
+
+    if (isCorrect) score += 1;
+
+    scoreLabel.textContent = `Верно: ${score}`;
+    progressFill.style.width = `${((current + 1) / questions.length) * 100}%`;
+
+    explainTitle.className = 'explain-title ' + (timedOut ? 'timeout' : (isCorrect ? 'ok' : 'no'));
+    explainTitle.textContent = timedOut
+      ? '⏱ Время вышло — засчитано как неверный ответ'
+      : (isCorrect ? '✓ Верно' : '✗ Неверно');
+    explainText.innerHTML = q.explain;
+    explainBox.style.display = 'block';
+    explainBox.classList.add('show');
+
+    nextBtn.style.display = 'inline-block';
+    nextBtn.textContent = (current === questions.length - 1) ? 'Показать результат →' : 'Следующий вопрос →';
+
+    userAnswers.push({
+      qIndex: current,
+      chosen: timedOut ? null : choiceIndex,
+      correct: isCorrect
+    });
+  }
+
+  function nextQuestion() {
+    if (current < questions.length - 1) {
+      current += 1;
+      renderQuestion();
+    } else {
+      showResult();
+    }
+  }
+
+  function showResult() {
+    quizScreen.style.display = 'none';
+    resultScreen.style.display = 'block';
+    resultScore.textContent = `${score} / ${questions.length}`;
+    const pct = Math.round((score / questions.length) * 100);
+
+    let grade, gradeColor, sub;
+    if (pct >= 90) {
+      grade = 'Go/Java internals — уровень эксперта';
+      gradeColor = 'var(--good)';
+      sub = 'Вы уверенно понимаете разницу в устройстве слайсов, мап, строк и памяти обоих языков.';
+    } else if (pct >= 70) {
+      grade = 'Сильный уровень';
+      gradeColor = 'var(--accent)';
+      sub = 'Хорошее понимание внутренностей, но есть темы, которые стоит закрепить.';
+    } else if (pct >= 50) {
+      grade = 'Средний уровень';
+      gradeColor = 'var(--warn)';
+      sub = 'Базовое понимание есть, но именно такие детали чаще всего «валят» на собеседованиях.';
+    } else {
+      grade = 'Нужно больше практики';
+      gradeColor = 'var(--bad)';
+      sub = 'Стоит внимательно разобрать объяснения ниже — это топ ошибок новичков на код-ревью.';
+    }
+    resultGrade.textContent = grade;
+    resultGrade.style.background = 'rgba(255,255,255,0.06)';
+    resultGrade.style.color = gradeColor;
+    resultGrade.style.border = `1px solid ${gradeColor}`;
+    resultSub.textContent = sub;
+
+    buildReview();
+  }
+
+  function buildReview() {
+    reviewList.innerHTML = '';
+    userAnswers.forEach((ans) => {
+      const q = questions[ans.qIndex];
+      const div = document.createElement('div');
+      div.className = 'review-item ' + (ans.correct ? 'ok' : 'no');
+      const plainQ = q.q.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      div.innerHTML = `<span class="icon">${ans.correct ? '✓' : '✗'}</span>
+        <span><b>Вопрос ${ans.qIndex + 1}:</b> ${plainQ.slice(0, 140)}${plainQ.length > 140 ? '…' : ''}<br>
+        <span style="color: var(--text-dim);">Правильный ответ: ${letterFor(q.correct)}. ${q.options[q.correct]}</span></span>`;
+      reviewList.appendChild(div);
+    });
+  }
+
+  startBtn.addEventListener('click', startQuiz);
+  nextBtn.addEventListener('click', nextQuestion);
+  restartBtn.addEventListener('click', () => {
+    reviewList.style.display = 'none';
+    startScreen.style.display = 'block';
+    resultScreen.style.display = 'none';
+  });
+  reviewBtn.addEventListener('click', () => {
+    reviewList.style.display = (reviewList.style.display === 'none') ? 'block' : 'none';
+  });
+
+})();
+</script>
+</body>
+</html>
