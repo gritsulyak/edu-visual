@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Квиз: gRPC и ProtoBuf (hard)</title>
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; background:#0f1117; color:#e8e8e8; display:flex; justify-content:center; padding:40px 15px; }
+  .container { max-width:720px; width:100%; background:#181b25; border-radius:14px; padding:30px; box-shadow:0 8px 30px rgba(0,0,0,0.4); }
+  h1 { font-size:22px; margin-bottom:4px; color:#7fd0ff; }
+  .sub { color:#9aa0ab; font-size:14px; margin-bottom:24px; }
+  .progress { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+  .qnum { font-size:14px; color:#9aa0ab; }
+  .timer { font-weight:700; font-size:18px; padding:6px 14px; border-radius:8px; background:#232838; }
+  .timer.warn { background:#5a2323; color:#ff8080; }
+  .bar { height:6px; background:#232838; border-radius:4px; overflow:hidden; margin-bottom:24px; }
+  .bar-fill { height:100%; background:linear-gradient(90deg,#7fd0ff,#5b8cff); transition:width 0.3s linear; }
+  .question { font-size:18px; line-height:1.5; margin-bottom:22px; font-weight:600; }
+  .options { display:flex; flex-direction:column; gap:10px; }
+  .option { background:#20242f; border:1px solid #2c313f; border-radius:10px; padding:14px 16px; cursor:pointer; font-size:15px; transition:all .15s; }
+  .option:hover { border-color:#5b8cff; background:#242938; }
+  .option.selected { border-color:#5b8cff; background:#28304a; }
+  .option.correct { border-color:#4caf50; background:#1f3324; }
+  .option.wrong { border-color:#e05353; background:#3a2020; }
+  .option.disabled { pointer-events:none; }
+  .footer { display:flex; justify-content:flex-end; margin-top:24px; }
+  button { background:#5b8cff; color:#fff; border:none; border-radius:8px; padding:12px 26px; font-size:15px; cursor:pointer; font-weight:600; }
+  button:disabled { background:#333a4a; cursor:not-allowed; }
+  .result { text-align:center; }
+  .result h2 { font-size:26px; color:#7fd0ff; margin-bottom:10px; }
+  .score { font-size:48px; font-weight:800; margin:20px 0; }
+  .explain { margin-top:14px; font-size:14px; color:#b7bdc7; background:#1c2130; border-radius:8px; padding:12px 14px; border-left:3px solid #5b8cff; display:none; }
+  .explain.show { display:block; }
+  .badge { display:inline-block; font-size:12px; padding:3px 10px; border-radius:6px; background:#3a2f0f; color:#e0b04a; margin-bottom:14px; }
+</style>
+</head>
+<body>
+<div class="container" id="app"></div>
+
+<script>
+const questions = [
+  {
+    q: "Что представляет собой gRPC с точки зрения архитектуры и транспорта?",
+    options: [
+      "Текстовый RPC-протокол на основе XML, работающий над HTTP/1.1 с постоянными соединениями",
+      "Высокопроизводительный RPC-фреймворк от Google, использующий HTTP/2 как транспорт и Protocol Buffers как формат сериализации по умолчанию",
+      "Брокер сообщений, реализующий publish-subscribe модель поверх TCP без описания контрактов",
+      "Расширение REST, которое добавляет к JSON-ответам бинарную сжатую полезную нагрузку"
+    ],
+    correct: 1,
+    explain: "gRPC — RPC-фреймворк на HTTP/2 с бинарной сериализацией через Protocol Buffers, что даёт мультиплексирование, стриминг и компактность."
+  },
+  {
+    q: "В каком сценарии выбор gRPC предпочтительнее REST/JSON, а в каком — наоборот?",
+    options: [
+      "gRPC лучше для публичного браузерного API без прокси, REST — для internal high-throughput коммуникации между сервисами",
+      "gRPC лучше для внутренней синхронной коммуникации между микросервисами с высокими требованиями к производительности и строгой типизацией контракта, REST/JSON — для публичных API с широкой поддержкой клиентов и человекочитаемой отладкой",
+      "Выбор не имеет значения, так как оба протокола идентичны по производительности и поддержке клиентов",
+      "gRPC всегда предпочтительнее, так как поддерживается из браузера без дополнительных прокси-слоёв"
+    ],
+    correct: 1,
+    explain: "gRPC даёт выигрыш во внутренних high-performance взаимодействиях со строгими контрактами (.proto), REST/JSON проще для внешних и браузерных клиентов без gRPC-Web."
+  },
+  {
+    q: "Почему в .proto-файлах категорически нельзя переиспользовать номер поля (field number) после удаления старого поля, и как правильно поступить?",
+    options: [
+      "Можно переиспользовать номер без ограничений — protobuf хранит только имена полей, номера не влияют на совместимость",
+      "Номер поля определяет порядок сериализации по алфавиту, поэтому переиспользование ломает только сортировку JSON-представления",
+      "Wire-формат кодирует данные по номеру поля, а не по имени; переиспользование номера приведёт к тому, что старые бинарные данные будут интерпретированы под новым типом/семантикой поля — нужно зарезервировать номер через reserved",
+      "Переиспользование номера безопасно, если новое поле имеет тот же тип данных, что и удалённое"
+    ],
+    correct: 2,
+    explain: "Protobuf wire-формат привязан к номерам полей. Удалённые номера нужно помечать reserved, чтобы избежать несовместимости при чтении старых сообщений новым кодом."
+  },
+  {
+    q: "В чём ключевое отличие bidirectional streaming от client-streaming и server-streaming в gRPC на уровне HTTP/2-механики?",
+    options: [
+      "Bidirectional streaming использует два независимых HTTP/2-соединения — по одному на каждое направление передачи",
+      "Bidirectional streaming работает поверх одного HTTP/2-стрима, где клиент и сервер асинхронно и независимо друг от друга пишут и читают сообщения в рамках одного вызова, тогда как client/server streaming ограничивают поток сообщений только одной стороной",
+      "Bidirectional streaming технически идентичен unary-вызову, просто повторённому несколько раз последовательно",
+      "Bidirectional streaming требует отдельного протокола WebSocket, встроенного в gRPC как fallback-транспорт"
+    ],
+    correct: 1,
+    explain: "HTTP/2 позволяет полнодуплексную передачу в рамках одного стрима: обе стороны читают/пишут frames независимо, что и лежит в основе bidi-streaming gRPC."
+  },
+  {
+    q: "Как балансировка нагрузки в gRPC отличается от классической L4/L7 балансировки для REST, и какую роль здесь играет grpc-gateway?",
+    options: [
+      "gRPC-соединения балансируются точно так же, как обычные HTTP/1.1 keep-alive соединения — round-robin на уровне TCP-соединений достаточен, grpc-gateway заменяет балансировщик",
+      "Поскольку gRPC мультиплексирует множество RPC-вызовов в одном долгоживущем HTTP/2-соединении, простая L4-балансировка по соединениям неэффективна (весь трафик оседает на одном инстансе); нужна L7-балансировка per-RPC (client-side балансировка, xDS/Envoy или proxyless grpc lb), а grpc-gateway лишь транслирует REST/JSON-запросы в gRPC-вызовы для внешних клиентов, не решая задачу балансировки сама по себе",
+      "grpc-gateway — это встроенный в gRPC балансировщик нагрузки, который автоматически распределяет RPC между репликами без дополнительной конфигурации",
+      "Балансировка в gRPC не нужна, так как HTTP/2 сам гарантирует равномерное распределение запросов между всеми доступными репликами сервиса"
+    ],
+    correct: 1,
+    explain: "Из-за мультиплексирования HTTP/2 нужна per-RPC (L7) балансировка через service mesh/xDS или client-side load balancing; grpc-gateway решает задачу REST-совместимости, а не балансировки."
+  }
+];
+
+const TIME_PER_Q = 180;
+let current = 0, score = 0, timer = null, timeLeft = TIME_PER_Q, answered = false;
+
+const app = document.getElementById('app');
+
+function render() {
+  if (current >= questions.length) return renderResult();
+  const q = questions[current];
+  timeLeft = TIME_PER_Q;
+  answered = false;
+  app.innerHTML = `
+    <div class="badge">Уровень: HARD</div>
+    <h1>Квиз: gRPC и ProtoBuf</h1>
+    <div class="sub">Проверка знаний по теме занятия «gRPC, ProtoBuf»</div>
+    <div class="progress">
+      <div class="qnum">Вопрос ${current+1} из ${questions.length}</div>
+      <div class="timer" id="timer">03:00</div>
+    </div>
+    <div class="bar"><div class="bar-fill" id="barfill" style="width:100%"></div></div>
+    <div class="question">${q.q}</div>
+    <div class="options" id="options">
+      ${q.options.map((opt,i)=>`<div class="option" data-i="${i}">${opt}</div>`).join('')}
+    </div>
+    <div class="explain" id="explain">${q.explain}</div>
+    <div class="footer">
+      <button id="nextBtn" disabled>${current === questions.length-1 ? 'Завершить' : 'Далее'}</button>
+    </div>
+  `;
+  document.querySelectorAll('.option').forEach(el=>{
+    el.addEventListener('click', ()=>selectOption(parseInt(el.dataset.i)));
+  });
+  document.getElementById('nextBtn').addEventListener('click', nextQuestion);
+  startTimer();
+}
+
+function startTimer() {
+  clearInterval(timer);
+  updateTimerDisplay();
+  timer = setInterval(()=>{
+    timeLeft--;
+    updateTimerDisplay();
+    if (timeLeft <= 0) {
+      clearInterval(timer);
+      if (!answered) selectOption(-1);
+    }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const m = Math.floor(timeLeft/60).toString().padStart(2,'0');
+  const s = (timeLeft%60).toString().padStart(2,'0');
+  const t = document.getElementById('timer');
+  if (t) {
+    t.textContent = `${m}:${s}`;
+    t.classList.toggle('warn', timeLeft <= 20);
+  }
+  const bf = document.getElementById('barfill');
+  if (bf) bf.style.width = (timeLeft/TIME_PER_Q*100)+'%';
+}
+
+function selectOption(i) {
+  if (answered) return;
+  answered = true;
+  clearInterval(timer);
+  const q = questions[current];
+  document.querySelectorAll('.option').forEach((el,idx)=>{
+    el.classList.add('disabled');
+    if (idx === q.correct) el.classList.add('correct');
+    if (idx === i && i !== q.correct) el.classList.add('wrong');
+  });
+  if (i === q.correct) score++;
+  document.getElementById('explain').classList.add('show');
+  document.getElementById('nextBtn').disabled = false;
+}
+
+function nextQuestion() {
+  current++;
+  render();
+}
+
+function renderResult() {
+  const pct = Math.round(score/questions.length*100);
+  app.innerHTML = `
+    <div class="result">
+      <div class="badge">Уровень: HARD</div>
+      <h2>Результат квиза</h2>
+      <div class="score">${score} / ${questions.length}</div>
+      <div class="sub">Верных ответов: ${pct}%</div>
+      <div class="footer" style="justify-content:center;">
+        <button onclick="restart()">Пройти ещё раз</button>
+      </div>
+    </div>
+  `;
+}
+
+function restart() {
+  current = 0; score = 0;
+  render();
+}
+
+render();
+</script>
+</body>
+</html>

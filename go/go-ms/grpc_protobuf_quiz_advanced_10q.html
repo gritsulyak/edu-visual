@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Квиз: gRPC и ProtoBuf (advanced, 10 вопросов)</title>
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; background:#0f1117; color:#e8e8e8; display:flex; justify-content:center; padding:40px 15px; }
+  .container { max-width:760px; width:100%; background:#181b25; border-radius:14px; padding:30px; box-shadow:0 8px 30px rgba(0,0,0,0.4); }
+  h1 { font-size:22px; margin-bottom:4px; color:#7fd0ff; }
+  .sub { color:#9aa0ab; font-size:14px; margin-bottom:24px; }
+  .progress { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+  .qnum { font-size:14px; color:#9aa0ab; }
+  .timer { font-weight:700; font-size:18px; padding:6px 14px; border-radius:8px; background:#232838; }
+  .timer.warn { background:#5a2323; color:#ff8080; }
+  .bar { height:6px; background:#232838; border-radius:4px; overflow:hidden; margin-bottom:24px; }
+  .bar-fill { height:100%; background:linear-gradient(90deg,#7fd0ff,#5b8cff); transition:width 0.3s linear; }
+  .question { font-size:18px; line-height:1.5; margin-bottom:22px; font-weight:600; }
+  .options { display:flex; flex-direction:column; gap:10px; }
+  .option { display:flex; gap:10px; background:#20242f; border:1px solid #2c313f; border-radius:10px; padding:14px 16px; cursor:pointer; font-size:15px; transition:all .15s; }
+  .option:hover { border-color:#5b8cff; background:#242938; }
+  .option.selected { border-color:#5b8cff; background:#28304a; }
+  .option.correct { border-color:#4caf50; background:#1f3324; }
+  .option.wrong { border-color:#e05353; background:#3a2020; }
+  .option.disabled { pointer-events:none; }
+  .opt-label { font-weight:700; color:#7fd0ff; flex-shrink:0; }
+  .footer { display:flex; justify-content:flex-end; margin-top:24px; }
+  button { background:#5b8cff; color:#fff; border:none; border-radius:8px; padding:12px 26px; font-size:15px; cursor:pointer; font-weight:600; }
+  button:disabled { background:#333a4a; cursor:not-allowed; }
+  .result { text-align:center; }
+  .result h2 { font-size:26px; color:#7fd0ff; margin-bottom:10px; }
+  .score { font-size:48px; font-weight:800; margin:20px 0; }
+  .explain { margin-top:14px; font-size:14px; color:#b7bdc7; background:#1c2130; border-radius:8px; padding:12px 14px; border-left:3px solid #5b8cff; display:none; }
+  .explain.show { display:block; }
+  .badge { display:inline-block; font-size:12px; padding:3px 10px; border-radius:6px; background:#3a2f0f; color:#e0b04a; margin-bottom:14px; }
+  .review { text-align:left; margin-top:20px; }
+  .review-item { background:#1c2130; border-radius:8px; padding:12px 14px; margin-bottom:10px; font-size:13px; }
+  .review-item .qtitle { font-weight:600; margin-bottom:4px; color:#e8e8e8; }
+  .review-item.ok { border-left:3px solid #4caf50; }
+  .review-item.bad { border-left:3px solid #e05353; }
+</style>
+</head>
+<body>
+<div class="container" id="app"></div>
+
+<script>
+const LABELS = ['a','b','c','d'];
+
+const questions = [
+  {
+    q: "Почему protobuf при удалении сообщения/поля в .proto-файле рекомендует использовать 'reserved', а не просто убирать строку?",
+    options: [
+      "Reserved нужен только для генерации документации, на wire-формат не влияет",
+      "Wire-формат кодирует поля по номеру, а не имени; без reserved новый код может присвоить старый номер новому полю с другим типом, что приведёт к неверной десериализации старых сообщений",
+      "Без reserved protoc откажется компилировать файл на этапе линковки",
+      "Reserved обязателен только для enum, для message и полей он не имеет смысла"
+    ],
+    correct: 1,
+    explain: "Protobuf сериализует по field number. Переиспользование номера без reserved ломает совместимость со старыми бинарными данными на wire."
+  },
+  {
+    q: "В чём принципиальное отличие HTTP/2 multiplexing, на котором работает gRPC, от HTTP/1.1 keep-alive?",
+    options: [
+      "HTTP/2 просто увеличивает таймаут соединения, остальное идентично HTTP/1.1",
+      "HTTP/1.1 keep-alive допускает только один запрос в очереди на соединение (head-of-line blocking на уровне приложения), тогда как HTTP/2 передаёт несколько независимых стримов параллельно в одном TCP-соединении без взаимной блокировки на уровне приложения",
+      "HTTP/2 multiplexing работает только для gRPC, для обычных REST-запросов оно недоступно в принципе",
+      "Разницы нет — оба протокола используют одинаковый механизм мультиплексирования запросов"
+    ],
+    correct: 1,
+    explain: "HTTP/2 вводит независимые стримы внутри одного соединения, устраняя app-level head-of-line blocking, характерный для HTTP/1.1 pipelining."
+  },
+  {
+    q: "Клиент использует pick_first load balancing policy с 3 адресами в резолвере. Что произойдёт, если первый адрес в списке стал недоступен во время активной сессии?",
+    options: [
+      "gRPC автоматически переключится на следующий адрес из списка и продолжит работу без ошибок для вызывающего кода",
+      "pick_first попытается переподключиться к тому же первому адресу; переключение на другой адрес из списка произойдёт только при следующей полной пересборке subchannel-листа резолвером, а текущие RPC получат ошибку соединения",
+      "Клиент немедленно и прозрачно распределит все последующие вызовы round-robin между оставшимися двумя адресами",
+      "pick_first не поддерживает более одного адреса, поэтому такая конфигурация вызовет панику при старте"
+    ],
+    correct: 1,
+    explain: "pick_first держится за один активный subchannel; при его обрыве gRPC retry на нём же, а не автоматический failover на другие адреса списка, в отличие от round_robin."
+  },
+  {
+    q: "Почему для gRPC внутри Kubernetes часто необходим service mesh (Istio/Linkerd) или client-side балансировка, а не 'обычный' Kubernetes Service (kube-proxy iptables/IPVS)?",
+    options: [
+      "Kubernetes Service работает на уровне L4 (TCP-соединения), а gRPC мультиплексирует множество RPC в одном долгоживущем TCP-соединении — L4-балансировка распределит только сами соединения, и весь трафик может осесть на одном поде",
+      "kube-proxy физически не умеет резолвить DNS-имена сервисов, что делает gRPC недоступным без service mesh",
+      "gRPC требует обязательного mTLS на уровне ядра Linux, который есть только в service mesh",
+      "Kubernetes Service поддерживает только протокол HTTP/1.1 и блокирует HTTP/2-трафик по умолчанию"
+    ],
+    correct: 0,
+    explain: "Так как kube-proxy балансирует TCP-соединения (L4), а gRPC держит одно соединение для множества запросов, нужна L7 per-RPC балансировка — через sidecar-proxy (Envoy) или client-side LB policy."
+  },
+  {
+    q: "В чём разница между deadline и timeout в контексте gRPC-вызова, и как это влияет на цепочку вызовов A → B → C?",
+    options: [
+      "Deadline и timeout — синонимы, различий в поведении нет ни в каком сценарии",
+      "Timeout — абсолютная точка во времени, устанавливаемая один раз в начале цепочки; deadline пересчитывается заново на каждом хопе от текущего момента",
+      "Deadline — это абсолютная точка во времени, которая передаётся через метаданные вызова и уменьшается по мере прохождения через сервисы A → B → C, тогда как timeout обычно задаётся относительно как 'сколько ждать с этого момента' на каждом отдельном вызове",
+      "Оба понятия применимы только к client-streaming RPC и не имеют смысла для unary-вызовов"
+    ],
+    correct: 2,
+    explain: "gRPC context.WithTimeout транслируется в абсолютный deadline, который передаётся дальше по цепочке вызовов, позволяя каждому сервису понимать, сколько реально осталось времени."
+  },
+  {
+    q: "Клиент отправляет client-streaming RPC и вызывает CloseSend() после отправки последнего сообщения. Что при этом происходит с HTTP/2-стримом?",
+    options: [
+      "HTTP/2-стрим немедленно и полностью закрывается в обоих направлениях",
+      "CloseSend() сигнализирует серверу конец потока сообщений от клиента (полукрытие в одном направлении); сервер может продолжать читать буфер и должен отправить единственный финальный ответ, после чего стрим закрывается полностью",
+      "CloseSend() эквивалентен вызову cancel() на контексте и обрывает вызов с ошибкой Canceled",
+      "CloseSend() требуется вызывать перед каждым Send(), иначе сообщения не будут доставлены серверу"
+    ],
+    correct: 1,
+    explain: "CloseSend закрывает поток данных только в направлении клиент→сервер (half-close), сервер ещё должен вернуть финальный response, после чего RPC завершается полностью."
+  },
+  {
+    q: "Почему grpc-gateway не может транслировать в REST/JSON произвольный bidirectional-streaming метод так же прозрачно, как unary-метод?",
+    options: [
+      "grpc-gateway в принципе не умеет генерировать код для сообщений с полями типа repeated",
+      "REST/JSON поверх стандартного HTTP/1.1 запрос-ответ не имеет встроенной модели полнодуплексного потока сообщений в обе стороны в рамках одного соединения; grpc-gateway обычно транслирует bidi-стриминг в server-streaming через chunked response или требует WebSocket-подобного расширения",
+      "grpc-gateway полностью не поддерживает stream в принципе ни для одного типа RPC, включая server-streaming",
+      "Проблема решается тривиально — REST/JSON поддерживает дуплекс из коробки через keep-alive заголовки"
+    ],
+    correct: 1,
+    explain: "grpc-gateway хорошо мапит unary и server-streaming (через chunked transfer), но полноценный клиентский bidi-стрим не имеет прямого REST-аналога без WebSocket или SSE-подобных надстроек."
+  },
+  {
+    q: "При включении protoc-gen-validate (как в 09_client_with_validate) валидация происходит на этапе сериализации/десериализации protobuf или отдельным шагом?",
+    options: [
+      "Валидация встроена непосредственно в protobuf wire-формат и выполняется автоматически при вызове Marshal/Unmarshal без дополнительного кода",
+      "protoc-gen-validate генерирует отдельный метод Validate()/ValidateAll() на структуре сообщения, который нужно вызвать явно (обычно в interceptor'е) — сама сериализация protobuf валидацию не выполняет",
+      "Валидация выполняется автоматически gRPC runtime перед вызовом любого хендлера без какой-либо дополнительной настройки",
+      "protoc-gen-validate заменяет стандартный protoc-gen-go и делает Marshal/Unmarshal валидирующими по умолчанию"
+    ],
+    correct: 1,
+    explain: "protoc-gen-validate генерирует отдельные методы Validate()/ValidateAll(), их нужно вызывать явно, часто через unary/stream interceptor — protobuf-сериализация сама по себе ничего не проверяет."
+  },
+  {
+    q: "Клиент открывает server-streaming RPC и после получения 5 из 100 ожидаемых сообщений вызывает cancel() на контексте. Что произойдёт на сервере?",
+    options: [
+      "Сервер продолжит отправлять оставшиеся 95 сообщений, так как cancel влияет только на клиентскую сторону чтения",
+      "Context на серверной стороне (полученный как параметр или через stream.Context()) станет Done с ошибкой context.Canceled; попытка Send() после этого обычно вернёт ошибку, и корректно написанный хендлер должен проверять ctx.Err() и прекратить отправку",
+      "Сервер не может определить отмену вызова со стороны клиента до тех пор, пока не попытается закрыть соединение сам",
+      "cancel() на клиенте не имеет эффекта на server-streaming RPC, в отличие от unary-вызовов"
+    ],
+    correct: 1,
+    explain: "gRPC пробрасывает отмену через RST_STREAM на транспортном уровне; серверный context.Done() срабатывает, и Send() на закрытом/отменённом стриме возвращает ошибку — хендлер должен сам это отслеживать."
+  },
+  {
+    q: "В сравнении REST/JSON и gRPC/protobuf по итоговому размеру сообщения на wire, какое утверждение точнее отражает реальное поведение?",
+    options: [
+      "protobuf всегда меньше JSON минимум в 10 раз независимо от структуры данных — это гарантия формата",
+      "Protobuf обычно компактнее JSON за счёт бинарной варинт-кодировки чисел и отсутствия имён полей и разделителей в самой payload, но выигрыш сильно зависит от структуры данных (много коротких строковых полей может свести разницу почти к нулю) и не учитывает HTTP/2 HPACK-сжатие заголовков, которое даёт отдельный выигрыш независимо от формата тела",
+      "JSON и protobuf дают идентичный размер на wire, если оба сжаты gzip перед отправкой",
+      "Размер сообщения не зависит от формата сериализации, а определяется исключительно транспортным протоколом (HTTP/1.1 vs HTTP/2)"
+    ],
+    correct: 1,
+    explain: "Protobuf экономит на отсутствии имён полей/скобок и varint-кодировании чисел, но выигрыш вариативен; отдельно HTTP/2 HPACK сжимает заголовки независимо от формата тела сообщения."
+  }
+];
+
+const TIME_PER_Q = 60;
+let current = 0, score = 0, timer = null, timeLeft = TIME_PER_Q, answered = false;
+const userAnswers = [];
+
+const app = document.getElementById('app');
+
+function render() {
+  if (current >= questions.length) return renderResult();
+  const q = questions[current];
+  timeLeft = TIME_PER_Q;
+  answered = false;
+  app.innerHTML = `
+    <div class="badge">Уровень: ADVANCED</div>
+    <h1>Квиз: gRPC и ProtoBuf</h1>
+    <div class="sub">10 вопросов &middot; 1 минута на вопрос &middot; повышенная сложность</div>
+    <div class="progress">
+      <div class="qnum">Вопрос ${current+1} из ${questions.length}</div>
+      <div class="timer" id="timer">01:00</div>
+    </div>
+    <div class="bar"><div class="bar-fill" id="barfill" style="width:100%"></div></div>
+    <div class="question">${q.q}</div>
+    <div class="options" id="options">
+      ${q.options.map((opt,i)=>`<div class="option" data-i="${i}"><span class="opt-label">${LABELS[i]})</span><span>${opt}</span></div>`).join('')}
+    </div>
+    <div class="explain" id="explain">${q.explain}</div>
+    <div class="footer">
+      <button id="nextBtn" disabled>${current === questions.length-1 ? 'Завершить' : 'Далее'}</button>
+    </div>
+  `;
+  document.querySelectorAll('.option').forEach(el=>{
+    el.addEventListener('click', ()=>selectOption(parseInt(el.dataset.i)));
+  });
+  document.getElementById('nextBtn').addEventListener('click', nextQuestion);
+  startTimer();
+}
+
+function startTimer() {
+  clearInterval(timer);
+  updateTimerDisplay();
+  timer = setInterval(()=>{
+    timeLeft--;
+    updateTimerDisplay();
+    if (timeLeft <= 0) {
+      clearInterval(timer);
+      if (!answered) selectOption(-1);
+    }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const m = Math.floor(timeLeft/60).toString().padStart(2,'0');
+  const s = (timeLeft%60).toString().padStart(2,'0');
+  const t = document.getElementById('timer');
+  if (t) {
+    t.textContent = `${m}:${s}`;
+    t.classList.toggle('warn', timeLeft <= 15);
+  }
+  const bf = document.getElementById('barfill');
+  if (bf) bf.style.width = (timeLeft/TIME_PER_Q*100)+'%';
+}
+
+function selectOption(i) {
+  if (answered) return;
+  answered = true;
+  clearInterval(timer);
+  const q = questions[current];
+  document.querySelectorAll('.option').forEach((el,idx)=>{
+    el.classList.add('disabled');
+    if (idx === q.correct) el.classList.add('correct');
+    if (idx === i && i !== q.correct) el.classList.add('wrong');
+  });
+  const isCorrect = i === q.correct;
+  if (isCorrect) score++;
+  userAnswers.push({ correct: isCorrect, chosen: i });
+  document.getElementById('explain').classList.add('show');
+  document.getElementById('nextBtn').disabled = false;
+}
+
+function nextQuestion() {
+  current++;
+  render();
+}
+
+function renderResult() {
+  const pct = Math.round(score/questions.length*100);
+  const reviewHtml = questions.map((q,idx)=>{
+    const ua = userAnswers[idx];
+    const cls = ua.correct ? 'ok' : 'bad';
+    const chosenLabel = ua.chosen === -1 ? 'время истекло' : LABELS[ua.chosen] + ')';
+    return `<div class="review-item ${cls}">
+      <div class="qtitle">${idx+1}. ${q.q}</div>
+      Ваш ответ: ${chosenLabel} &middot; Правильный: ${LABELS[q.correct]})
+    </div>`;
+  }).join('');
+  app.innerHTML = `
+    <div class="result">
+      <div class="badge">Уровень: ADVANCED</div>
+      <h2>Результат квиза</h2>
+      <div class="score">${score} / ${questions.length}</div>
+      <div class="sub">Верных ответов: ${pct}%</div>
+    </div>
+    <div class="review">${reviewHtml}</div>
+    <div class="footer" style="justify-content:center;">
+      <button onclick="restart()">Пройти ещё раз</button>
+    </div>
+  `;
+}
+
+function restart() {
+  current = 0; score = 0; userAnswers.length = 0;
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
